@@ -1,11 +1,14 @@
 use chrono::{DateTime, Utc};
+use zed_reqwest::{Client};
 
 use super::{
-    requests::LFMRequestBuilder,
+    // requests::LFMRequestBuilder,
     types::{GetSession, GetToken, Session},
 };
 
 pub struct LastFMClient {
+    client: Client,
+    endpoint_url: url::Url,
     api_key: String,
     api_secret: &'static str,
     auth_session: Option<String>,
@@ -17,6 +20,8 @@ impl LastFMClient {
             api_key: key,
             api_secret: secret,
             auth_session: None,
+            client: Client::builder().user_agent("HummingbirdMMBS/0.1").build().unwrap(),
+            endpoint_url: "https://ws.audioscrobbler.com/2.0".parse().unwrap(),
         }
     }
 
@@ -25,26 +30,28 @@ impl LastFMClient {
     }
 
     pub async fn get_token(&mut self) -> anyhow::Result<String> {
-        let token = LFMRequestBuilder::new(self.api_key.clone())
-            .add_param("method", "auth.gettoken".to_string())
-            .read()
-            .sign(self.api_secret)
-            .send_request::<GetToken>()
-            .await?;
+        // let token = LFMRequestBuilder::new(self.api_key.clone())
+        //     .add_param("method", "auth.gettoken".to_string())
+        //     .read()
+        //     .sign(self.api_secret)
+        //     .send_request::<GetToken>(self.client.clone())
+        //     .await?;
 
-        Ok(token.token)
+        // Ok(token.token)
+        todo!()
     }
 
     pub async fn get_session(&mut self, token: String) -> anyhow::Result<Session> {
-        let session = LFMRequestBuilder::new(self.api_key.clone())
-            .add_param("method", "auth.getsession".to_string())
-            .add_param("token", token)
-            .write()
-            .sign(self.api_secret)
-            .send_request::<GetSession>()
-            .await?;
+        // let session = LFMRequestBuilder::new(self.api_key.clone())
+        //     .add_param("method", "auth.getsession".to_string())
+        //     .add_param("token", token)
+        //     .write()
+        //     .sign(self.api_secret)
+        //     .send_request::<GetSession>(self.client.clone())
+        //     .await?;
 
-        Ok(session.session)
+        // Ok(session.session)
+        todo!()
     }
 
     pub async fn scrobble(
@@ -55,21 +62,21 @@ impl LastFMClient {
         album: Option<String>,
         duration: Option<u64>,
     ) -> anyhow::Result<()> {
-        let Some(session) = self.auth_session.clone() else {
-            return Err(anyhow::Error::msg("not logged in"));
-        };
-        LFMRequestBuilder::new(self.api_key.clone())
-            .add_param("method", "track.scrobble".to_string())
-            .add_param("artist[0]", artist)
-            .add_param("track[0]", track)
-            .add_param("timestamp[0]", timestamp.timestamp().to_string())
-            .add_optional_param("album[0]", album)
-            .add_optional_param("duration[0]", duration.map(|a| u64::to_string(&a)))
-            .add_param("sk", session)
-            .write()
-            .sign(self.api_secret)
-            .send_write_request_ns()
-            .await?;
+        // let Some(session) = self.auth_session.clone() else {
+        //     return Err(anyhow::Error::msg("not logged in"));
+        // };
+        // LFMRequestBuilder::new(self.api_key.clone())
+        //     .add_param("method", "track.scrobble".to_string())
+        //     .add_param("artist[0]", artist)
+        //     .add_param("track[0]", track)
+        //     .add_param("timestamp[0]", timestamp.timestamp().to_string())
+        //     .add_optional_param("album[0]", album)
+        //     .add_optional_param("duration[0]", duration.map(|a| u64::to_string(&a)))
+        //     .add_param("sk", session)
+        //     .write()
+        //     .sign(self.api_secret)
+        //     .send_write_request_ns(self.client.clone())
+        //     .await?;
 
         Ok(())
     }
@@ -81,20 +88,20 @@ impl LastFMClient {
         album: Option<String>,
         duration: Option<u64>,
     ) -> anyhow::Result<()> {
-        let Some(session) = self.auth_session.clone() else {
-            return Err(anyhow::Error::msg("not logged in"));
-        };
-        LFMRequestBuilder::new(self.api_key.clone())
-            .add_param("method", "track.updateNowPlaying".to_string())
-            .add_param("artist", artist)
-            .add_param("track", track)
-            .add_optional_param("album", album)
-            .add_optional_param("duration", duration.map(|a| u64::to_string(&a)))
-            .add_param("sk", session)
-            .write()
-            .sign(self.api_secret)
-            .send_write_request_ns()
-            .await?;
+        // let Some(session) = self.auth_session.clone() else {
+        //     return Err(anyhow::Error::msg("not logged in"));
+        // };
+        // LFMRequestBuilder::new(self.api_key.clone())
+        //     .add_param("method", "track.updateNowPlaying".to_string())
+        //     .add_param("artist", artist)
+        //     .add_param("track", track)
+        //     .add_optional_param("album", album)
+        //     .add_optional_param("duration", duration.map(|a| u64::to_string(&a)))
+        //     .add_param("sk", session)
+        //     .write()
+        //     .sign(self.api_secret)
+        //     .send_write_request_ns(self.client.clone())
+        //     .await?;
 
         Ok(())
     }

@@ -21,7 +21,7 @@ impl RenderOnce for AboutDialog {
     fn render(self, _: &mut gpui::Window, cx: &mut gpui::App) -> impl gpui::IntoElement {
         let theme = cx.global::<Theme>();
         let version = env!("CARGO_PKG_VERSION");
-        let hash = env!("VERGEN_GIT_SHA");
+        // let hash = env!("VERGEN_GIT_SHA");
 
         modal().on_exit(self.on_exit).child(
             div()
@@ -51,7 +51,7 @@ impl RenderOnce for AboutDialog {
                                             .line_height(px(13.0))
                                             .text_color(theme.text_secondary)
                                             .mt(px(1.0))
-                                            .child(format!("{version} ({hash})")),
+                                            .child(format!("{version}")),
                                     ),
                             ),
                         )

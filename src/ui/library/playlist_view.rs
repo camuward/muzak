@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use ahash::AHashMap;
+use rustc_hash::FxHashMap;
 use gpui::{
     App, AppContext, Context, Entity, FontWeight, ParentElement, Render, Styled, Window, div, px,
     rems, uniform_list,
@@ -35,7 +35,7 @@ use super::track_listing::track_item::TrackPlaylistInfo;
 pub struct PlaylistView {
     playlist: Arc<Playlist>,
     playlist_track_ids: Arc<Vec<(i64, i64, i64)>>,
-    views: Entity<AHashMap<usize, Entity<TrackItem>>>,
+    views: Entity<FxHashMap<usize, Entity<TrackItem>>>,
     render_counter: Entity<usize>,
 }
 
@@ -52,7 +52,7 @@ impl PlaylistView {
                             this.playlist_track_ids =
                                 cx.get_playlist_tracks(this.playlist.id).unwrap();
 
-                            this.views = cx.new(|_| AHashMap::new());
+                            this.views = cx.new(|_| FxHashMap::default());
                             this.render_counter = cx.new(|_| 0);
                         }
                     }
@@ -63,7 +63,7 @@ impl PlaylistView {
             Self {
                 playlist: cx.get_playlist(playlist_id).unwrap(),
                 playlist_track_ids: cx.get_playlist_tracks(playlist_id).unwrap(),
-                views: cx.new(|_| AHashMap::new()),
+                views: cx.new(|_| FxHashMap::default()),
                 render_counter: cx.new(|_| 0),
             }
         })

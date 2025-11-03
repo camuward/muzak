@@ -45,6 +45,8 @@ pub enum PlaybackState {
 }
 
 pub struct PlaybackThread {
+    executor: tokio::runtime::Handle,
+
     /// The playback settings. Recieved on thread startup.
     playback_settings: PlaybackSettings,
 
@@ -116,17 +118,19 @@ pub const LINEAR_SCALING_COEFFICIENT: f64 = 0.295751527165_f64;
 impl PlaybackThread {
     /// Starts the playback thread and returns the created interface.
     pub fn start<T: PlaybackInterface>(
+        executor: tokio::runtime::Handle,
         queue: Arc<RwLock<Vec<QueueItemData>>>,
         settings: PlaybackSettings,
     ) -> T {
         // TODO: use the refresh rate for the bounds
-        let (commands_tx, commands_rx) = async_channel::unbounded();
-        let (events_tx, events_rx) = async_channel::unbounded();
+        let (commands_tx, commands_rx) = async_channel::bounded(24);
+        let (events_tx, events_rx) = async_channel::bounded(24);
 
         std::thread::Builder::new()
             .name("playback".to_string())
             .spawn(move || {
                 let mut thread = PlaybackThread {
+                    executor,
                     commands_rx,
                     events_tx,
                     media_provider: None,
@@ -267,23 +271,21 @@ impl PlaybackThread {
                 .clone(),
         );
         let events_tx = self.events_tx.clone();
-        smol::spawn(async move {
+        self.executor.spawn(async move {
             events_tx
                 .send(PlaybackEvent::MetadataUpdate(metadata))
                 .await
                 .expect("unable to send event");
-        })
-        .detach();
+        });
 
         let image = provider.read_image().expect("failed to decode image");
         let events_tx = self.events_tx.clone();
-        smol::spawn(async move {
+        self.executor.spawn(async move {
             events_tx
                 .send(PlaybackEvent::AlbumArtUpdate(image))
                 .await
                 .expect("unable to send event");
-        })
-        .detach();
+        });
     }
 
     /// Read incoming commands from the command channel, and process them.
@@ -332,13 +334,12 @@ impl PlaybackThread {
             self.state = PlaybackState::Paused;
 
             let events_tx = self.events_tx.clone();
-            smol::spawn(async move {
+            self.executor.spawn(async move {
                 events_tx
                     .send(PlaybackEvent::StateChanged(PlaybackState::Paused))
                     .await
                     .expect("unable to send event");
-            })
-            .detach();
+            });
         }
     }
 
@@ -389,13 +390,12 @@ impl PlaybackThread {
             self.state = PlaybackState::Playing;
 
             let events_tx = self.events_tx.clone();
-            smol::spawn(async move {
+            self.executor.spawn(async move {
                 events_tx
                     .send(PlaybackEvent::StateChanged(PlaybackState::Playing))
                     .await
                     .expect("unable to send event");
-            })
-            .detach();
+            });
         }
 
         let queue = self.queue.read().expect("couldn't get the queue");
@@ -408,13 +408,12 @@ impl PlaybackThread {
                 error!("Unable to open file: {:?}", err);
             };
             let events_tx = self.events_tx.clone();
-            smol::spawn(async move {
+            self.executor.spawn(async move {
                 events_tx
                     .send(PlaybackEvent::QueuePositionChanged(0))
                     .await
                     .expect("unable to send event");
-            })
-            .detach();
+            });
             self.queue_next = 1;
         }
 
@@ -489,32 +488,29 @@ impl PlaybackThread {
 
         let events_tx = self.events_tx.clone();
         let path = path.clone();
-        smol::spawn(async move {
+        self.executor.spawn(async move {
             events_tx
                 .send(PlaybackEvent::SongChanged(path))
                 .await
                 .expect("unable to send event");
-        })
-        .detach();
+        });
 
         if let Ok(duration) = provider.duration_secs() {
             let events_tx = self.events_tx.clone();
-            smol::spawn(async move {
+            self.executor.spawn(async move {
                 events_tx
                     .send(PlaybackEvent::DurationChanged(duration))
                     .await
                     .expect("unable to send event");
-            })
-            .detach();
+            });
         } else {
             let events_tx = self.events_tx.clone();
-            smol::spawn(async move {
+            self.executor.spawn(async move {
                 events_tx
                     .send(PlaybackEvent::DurationChanged(0))
                     .await
                     .expect("unable to send event");
-            })
-            .detach();
+            });
         }
 
         if recreation_required {
@@ -532,13 +528,12 @@ impl PlaybackThread {
         self.update_ts();
 
         let events_tx = self.events_tx.clone();
-        smol::spawn(async move {
+        self.executor.spawn(async move {
             events_tx
                 .send(PlaybackEvent::StateChanged(PlaybackState::Playing))
                 .await
                 .expect("unable to send event");
-        })
-        .detach();
+        });
 
         Ok(())
     }
@@ -566,13 +561,12 @@ impl PlaybackThread {
             }
             let events_tx = self.events_tx.clone();
             let queue_next = self.queue_next;
-            smol::spawn(async move {
+            self.executor.spawn(async move {
                 events_tx
                     .send(PlaybackEvent::QueuePositionChanged(queue_next))
                     .await
                     .expect("unable to send event");
-            })
-            .detach();
+            });
             self.queue_next += 1;
         } else if !user_initiated {
             if self.repeat == RepeatState::Repeating {
@@ -582,13 +576,12 @@ impl PlaybackThread {
                     queue.shuffle(&mut rng());
 
                     let events_tx = self.events_tx.clone();
-                    smol::spawn(async move {
+                    self.executor.spawn(async move {
                         events_tx
                             .send(PlaybackEvent::QueueUpdated)
                             .await
                             .expect("unable to send event");
-                    })
-                    .detach();
+                    });
                 }
 
                 drop(queue);
@@ -623,26 +616,24 @@ impl PlaybackThread {
             };
             let events_tx = self.events_tx.clone();
             let new_position = self.queue_next - 1;
-            smol::spawn(async move {
+            self.executor.spawn(async move {
                 events_tx
                     .send(PlaybackEvent::QueuePositionChanged(new_position))
                     .await
                     .expect("unable to send event");
-            })
-            .detach();
+            });
         } else if self.queue_next > 1 {
             info!("Opening previous file in queue");
             let path = queue[self.queue_next - 2].get_path().clone();
             drop(queue);
             let events_tx = self.events_tx.clone();
             let new_position = self.queue_next - 2;
-            smol::spawn(async move {
+            self.executor.spawn(async move {
                 events_tx
                     .send(PlaybackEvent::QueuePositionChanged(new_position))
                     .await
                     .expect("unable to send event");
-            })
-            .detach();
+            });
             self.queue_next -= 1;
             debug!("queue_next: {}", self.queue_next);
 
@@ -675,23 +666,21 @@ impl PlaybackThread {
             };
             self.queue_next = pre_len + 1;
             let events_tx = self.events_tx.clone();
-            smol::spawn(async move {
+            self.executor.spawn(async move {
                 events_tx
                     .send(PlaybackEvent::QueuePositionChanged(pre_len))
                     .await
                     .expect("unable to send event");
-            })
-            .detach();
+            });
         }
 
         let events_tx = self.events_tx.clone();
-        smol::spawn(async move {
+        self.executor.spawn(async move {
             events_tx
                 .send(PlaybackEvent::QueueUpdated)
                 .await
                 .expect("unable to send event");
-        })
-        .detach();
+        });
     }
 
     /// Add a list of QueueItemData to the queue. If nothing is playing, start playing the first
@@ -718,52 +707,51 @@ impl PlaybackThread {
         }
 
         if self.state == PlaybackState::Stopped
-            && let Some(first) = first {
-                let path = first.get_path();
+            && let Some(first) = first
+        {
+            let path = first.get_path();
 
-                if let Err(err) = self.open(&path) {
-                    error!("Unable to open file: {:?}", err);
-                };
-                self.queue_next = pre_len + 1;
-                let events_tx = self.events_tx.clone();
-                smol::spawn(async move {
-                    events_tx
-                        .send(PlaybackEvent::QueuePositionChanged(pre_len))
-                        .await
-                        .expect("unable to send event");
-                })
-                .detach();
-            }
+            if let Err(err) = self.open(&path) {
+                error!("Unable to open file: {:?}", err);
+            };
+            self.queue_next = pre_len + 1;
+            let events_tx = self.events_tx.clone();
+            self.executor.spawn(async move {
+                events_tx
+                    .send(PlaybackEvent::QueuePositionChanged(pre_len))
+                    .await
+                    .expect("unable to send event");
+            });
+        }
 
         let events_tx = self.events_tx.clone();
-        smol::spawn(async move {
+        self.executor.spawn(async move {
             events_tx
                 .send(PlaybackEvent::QueueUpdated)
                 .await
                 .expect("unable to send event");
-        })
-        .detach();
+        });
     }
 
     /// Emit a PositionChanged event if the timestamp has changed.
     fn update_ts(&mut self) {
         if let Some(provider) = &self.media_provider
-            && let Ok(timestamp) = provider.position_secs() {
-                if timestamp == self.last_timestamp {
-                    return;
-                }
-
-                let events_tx = self.events_tx.clone();
-                smol::spawn(async move {
-                    events_tx
-                        .send(PlaybackEvent::PositionChanged(timestamp))
-                        .await
-                        .expect("unable to send event");
-                })
-                .detach();
-
-                self.last_timestamp = timestamp;
+            && let Ok(timestamp) = provider.position_secs()
+        {
+            if timestamp == self.last_timestamp {
+                return;
             }
+
+            let events_tx = self.events_tx.clone();
+            self.executor.spawn(async move {
+                events_tx
+                    .send(PlaybackEvent::PositionChanged(timestamp))
+                    .await
+                    .expect("unable to send event");
+            });
+
+            self.last_timestamp = timestamp;
+        }
     }
 
     /// Seek to the specified timestamp (in seconds).
@@ -788,13 +776,12 @@ impl PlaybackThread {
             };
             self.queue_next = index + 1;
             let events_tx = self.events_tx.clone();
-            smol::spawn(async move {
+            self.executor.spawn(async move {
                 events_tx
                     .send(PlaybackEvent::QueuePositionChanged(index))
                     .await
                     .expect("unable to send event");
-            })
-            .detach();
+            });
         }
     }
 
@@ -839,13 +826,12 @@ impl PlaybackThread {
         self.jump(0);
 
         let events_tx = self.events_tx.clone();
-        smol::spawn(async move {
+        self.executor.spawn(async move {
             events_tx
                 .send(PlaybackEvent::QueueUpdated)
                 .await
                 .expect("unable to send event");
-        })
-        .detach();
+        });
     }
 
     /// Clear the current queue.
@@ -856,7 +842,7 @@ impl PlaybackThread {
         self.queue_next = 0;
 
         let events_tx = self.events_tx.clone();
-        smol::spawn(async move {
+        self.executor.spawn(async move {
             events_tx
                 .send(PlaybackEvent::QueuePositionChanged(0))
                 .await
@@ -865,8 +851,7 @@ impl PlaybackThread {
                 .send(PlaybackEvent::QueueUpdated)
                 .await
                 .expect("unable to send event");
-        })
-        .detach();
+        });
     }
 
     /// Stop the current playback.
@@ -878,13 +863,12 @@ impl PlaybackThread {
         self.state = PlaybackState::Stopped;
 
         let events_tx = self.events_tx.clone();
-        smol::spawn(async move {
+        self.executor.spawn(async move {
             events_tx
                 .send(PlaybackEvent::StateChanged(PlaybackState::Stopped))
                 .await
                 .expect("unable to send event");
-        })
-        .detach();
+        });
     }
 
     /// Toggle shuffle mode. This will result in the queue being duplicated and shuffled.
@@ -911,7 +895,7 @@ impl PlaybackThread {
             self.shuffle = false;
 
             let events_tx = self.events_tx.clone();
-            smol::spawn(async move {
+            self.executor.spawn(async move {
                 events_tx
                     .send(PlaybackEvent::ShuffleToggled(false, index))
                     .await
@@ -926,8 +910,7 @@ impl PlaybackThread {
                         .await
                         .expect("unable to send event");
                 }
-            })
-            .detach();
+            });
         } else {
             self.original_queue = queue.clone();
             let length = queue.len();
@@ -936,7 +919,7 @@ impl PlaybackThread {
 
             let events_tx = self.events_tx.clone();
             let queue_next = self.queue_next;
-            smol::spawn(async move {
+            self.executor.spawn(async move {
                 events_tx
                     .send(PlaybackEvent::ShuffleToggled(true, queue_next))
                     .await
@@ -945,8 +928,7 @@ impl PlaybackThread {
                     .send(PlaybackEvent::QueueUpdated)
                     .await
                     .expect("unable to send event");
-            })
-            .detach();
+            });
         }
     }
 
@@ -966,13 +948,12 @@ impl PlaybackThread {
                 .expect("failed to set volume");
 
             let events_tx = self.events_tx.clone();
-            smol::spawn(async move {
+            self.executor.spawn(async move {
                 events_tx
                     .send(PlaybackEvent::VolumeChanged(volume))
                     .await
                     .expect("unable to send event");
-            })
-            .detach();
+            });
         }
     }
 
@@ -987,13 +968,12 @@ impl PlaybackThread {
         };
 
         let events_tx = self.events_tx.clone();
-        smol::spawn(async move {
+        self.executor.spawn(async move {
             events_tx
                 .send(PlaybackEvent::RepeatChanged(state))
                 .await
                 .expect("unable to send event");
-        })
-        .detach();
+        });
     }
 
     /// Toggles between play/pause.

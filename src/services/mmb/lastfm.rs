@@ -3,7 +3,6 @@ use std::{path::PathBuf, sync::Arc};
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use client::LastFMClient;
-use smol::block_on;
 use tracing::{debug, warn};
 
 use crate::{media::metadata::Metadata, playback::thread::PlaybackState};
@@ -11,7 +10,7 @@ use crate::{media::metadata::Metadata, playback::thread::PlaybackState};
 use super::MediaMetadataBroadcastService;
 
 pub mod client;
-mod requests;
+// mod requests;
 pub mod types;
 mod util;
 
@@ -19,6 +18,7 @@ pub const LASTFM_API_KEY: Option<&'static str> = option_env!("LASTFM_API_KEY");
 pub const LASTFM_API_SECRET: Option<&'static str> = option_env!("LASTFM_API_SECRET");
 
 pub struct LastFM {
+    executor: tokio::runtime::Handle,
     client: LastFMClient,
     start_timestamp: Option<DateTime<Utc>>,
     accumulated_time: u64,
@@ -29,8 +29,9 @@ pub struct LastFM {
 }
 
 impl LastFM {
-    pub fn new(client: LastFMClient) -> Self {
+    pub fn new(executor: tokio::runtime::Handle, client: LastFMClient) -> Self {
         LastFM {
+            executor,
             client,
             start_timestamp: None,
             accumulated_time: 0,
@@ -126,7 +127,7 @@ impl Drop for LastFM {
     fn drop(&mut self) {
         if self.should_scrobble {
             debug!("attempting scrobble before dropping LastFM, this will block");
-            block_on(self.scrobble());
+            self.executor.clone().block_on(self.scrobble());
         }
     }
 }

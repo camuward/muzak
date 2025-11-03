@@ -3,7 +3,7 @@ mod table_item;
 
 use std::{rc::Rc, sync::Arc};
 
-use ahash::AHashMap;
+use rustc_hash::FxHashMap;
 use gpui::{prelude::FluentBuilder, *};
 use indexmap::IndexMap;
 use rustc_hash::FxBuildHasher;
@@ -17,7 +17,7 @@ use crate::ui::{
     util::{create_or_retrieve_view, prune_views},
 };
 
-type RowMap<T, C> = AHashMap<usize, Entity<TableItem<T, C>>>;
+type RowMap<T, C> = FxHashMap<usize, Entity<TableItem<T, C>>>;
 
 #[allow(type_alias_bounds)]
 pub type OnSelectHandler<T, C>
@@ -60,7 +60,7 @@ where
     pub fn new(cx: &mut App, on_select: Option<OnSelectHandler<T, C>>) -> Entity<Self> {
         cx.new(|cx| {
             let columns = cx.new(|_| Arc::new(T::default_columns()));
-            let views = cx.new(|_| AHashMap::new());
+            let views = cx.new(|_| FxHashMap::default());
             let render_counter = cx.new(|_| 0);
             let sort_method = cx.new(|_| None);
 
@@ -79,7 +79,7 @@ where
                 let sort_method = *sort.read(cx);
                 let items = T::get_rows(cx, sort_method).ok().map(Arc::new);
 
-                this.views = cx.new(|_| AHashMap::new());
+                this.views = cx.new(|_| FxHashMap::default());
                 this.render_counter = cx.new(|_| 0);
                 this.items = items;
 
@@ -92,7 +92,7 @@ where
                     let sort_method = *this.sort_method.read(cx);
                     let items = T::get_rows(cx, sort_method).ok().map(Arc::new);
 
-                    this.views = cx.new(|_| AHashMap::new());
+                    this.views = cx.new(|_| FxHashMap::default());
                     this.render_counter = cx.new(|_| 0);
                     this.items = items;
 

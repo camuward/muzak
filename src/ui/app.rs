@@ -11,10 +11,7 @@ use sqlx::SqlitePool;
 use tracing::debug;
 
 use crate::{
-    library::{
-        db::create_pool,
-        scan::{ScanInterface, ScanThread},
-    },
+    library::scan::{ScanInterface, ScanThread},
     playback::{interface::GPUIPlaybackInterface, queue::QueueItemData, thread::PlaybackThread},
     services::controllers::make_cl,
     settings::{
@@ -30,7 +27,6 @@ use super::{
     components::{input, modal},
     constants::APP_ROUNDING,
     controls::Controls,
-    data::create_album_cache,
     global_actions::register_actions,
     header::Header,
     library::Library,
@@ -273,9 +269,10 @@ pub fn find_fonts(cx: &mut App) -> gpui::Result<()> {
     let mut fonts = vec![];
     for path in paths {
         if (path.ends_with(".ttf") || path.ends_with(".otf"))
-            && let Some(v) = cx.asset_source().load(&path)? {
-                fonts.push(v);
-            }
+            && let Some(v) = cx.asset_source().load(&path)?
+        {
+            fonts.push(v);
+        }
     }
 
     let results = cx.text_system().add_fonts(fonts);
@@ -303,36 +300,35 @@ pub struct DropImageDummyModel;
 
 impl EventEmitter<Vec<Arc<RenderImage>>> for DropImageDummyModel {}
 
-pub async fn run() {
+pub fn run() {
     let dirs = get_dirs();
-    let directory = dirs.data_dir().to_path_buf();
-    if !directory.exists() {
-        fs::create_dir_all(&directory)
-            .unwrap_or_else(|e| panic!("couldn't create data directory, {:?}, {:?}", directory, e));
+    let data_dir = dirs.data_dir().to_path_buf();
+    if !data_dir.exists() {
+        fs::create_dir_all(&data_dir)
+            .unwrap_or_else(|e| panic!("couldn't create data directory, {:?}, {:?}", data_dir, e));
     }
-    let file = directory.join("library.db");
 
-    let pool_result = create_pool(file).await;
-    let Ok(pool) = pool_result else {
-        panic!(
-            "fatal: unable to create database pool: {:?}",
-            pool_result.unwrap_err()
-        );
-    };
+    let runtime = tokio::runtime::Builder::new_multi_thread().enable_all().build().unwrap();
+    let pool = runtime
+        .block_on(crate::library::db::create_pool(data_dir.join("library.db")))
+        .unwrap_or_else(|err| panic!("fatal: unable to create database pool: {err:?}"));
+    let handle = runtime.handle().clone();
 
     Application::new()
-        .with_assets(HummingbirdAssetSource::new(pool.clone()))
+        .with_assets(HummingbirdAssetSource::new(handle.clone(), pool.clone()))
         .run(move |cx: &mut App| {
+            cx.set_global(crate::SchedulerHandle(runtime));
+            
             let bounds = Bounds::centered(None, size(px(1024.0), px(700.0)), cx);
             find_fonts(cx).expect("unable to load fonts");
             register_actions(cx);
 
             let queue: Arc<RwLock<Vec<QueueItemData>>> = Arc::new(RwLock::new(Vec::new()));
-            let storage = Storage::new(directory.clone().join("app_data.json"));
+            let storage = Storage::new(data_dir.join("app_data.json"));
             let storage_data = storage.load_or_default();
 
-            setup_theme(cx, directory.join("theme.json"));
-            setup_settings(cx, directory.join("settings.json"));
+            setup_theme(cx, data_dir.join("theme.json"));
+            setup_settings(cx, data_dir.join("settings.json"));
 
             build_models(
                 cx,
@@ -346,12 +342,10 @@ pub async fn run() {
             input::bind_actions(cx);
             modal::bind_actions(cx);
 
-            create_album_cache(cx);
-
             let settings = cx.global::<SettingsGlobal>().model.read(cx);
             let playback_settings = settings.playback.clone();
             let mut scan_interface: ScanInterface =
-                ScanThread::start(pool.clone(), settings.scanning.clone());
+                ScanThread::start(handle.clone(), pool.clone(), settings.scanning.clone());
             scan_interface.scan();
             scan_interface.start_broadcast(cx);
 
@@ -368,7 +362,7 @@ pub async fn run() {
             .detach();
 
             let mut playback_interface: GPUIPlaybackInterface =
-                PlaybackThread::start(queue, playback_settings);
+                PlaybackThread::start(handle.clone(), queue, playback_settings);
             playback_interface.start_broadcast(cx);
 
             if !parse_args_and_prepare(cx, &playback_interface)

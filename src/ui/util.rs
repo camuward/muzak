@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use ahash::AHashMap;
+use rustc_hash::FxHashMap;
 use gpui::{
     AnyElement, App, Bounds, Element, ElementId, Entity, GlobalElementId, InspectorElementId,
     IntoElement, LayoutId, ParentElement, Pixels, Render, RenderImage, Stateful, StyleRefinement,
@@ -9,7 +9,7 @@ use gpui::{
 use tracing::debug;
 
 pub fn prune_views<T>(
-    views_model: &Entity<AHashMap<usize, Entity<T>>>,
+    views_model: &Entity<FxHashMap<usize, Entity<T>>>,
     render_counter: &Entity<usize>,
     current: usize,
     cx: &mut App,
@@ -50,7 +50,7 @@ where
 }
 
 pub fn create_or_retrieve_view<T>(
-    views_model: &Entity<AHashMap<usize, Entity<T>>>,
+    views_model: &Entity<FxHashMap<usize, Entity<T>>>,
     idx: usize,
     creation_fn: impl FnOnce(&mut App) -> Entity<T>,
     cx: &mut App,

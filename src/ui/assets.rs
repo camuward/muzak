@@ -10,12 +10,13 @@ use url::Url;
 use crate::ui::assets::bundled::BundledAssets;
 
 pub struct HummingbirdAssetSource {
+    executor: tokio::runtime::Handle,
     pool: SqlitePool,
 }
 
 impl HummingbirdAssetSource {
-    pub fn new(pool: SqlitePool) -> Self {
-        Self { pool }
+    pub fn new(executor: tokio::runtime::Handle, pool: SqlitePool) -> Self {
+        Self { executor, pool }
     }
 }
 
@@ -24,7 +25,7 @@ impl AssetSource for HummingbirdAssetSource {
         let url = Url::parse(&path[1..])?;
 
         match url.scheme() {
-            "db" => db::load(&self.pool, url),
+            "db" => db::load(self, url),
             "bundled" => BundledAssets::load(url),
             _ => panic!("invalid url scheme for resource"),
         }

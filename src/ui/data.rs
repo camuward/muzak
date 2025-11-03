@@ -1,9 +1,8 @@
-use std::{fs::File, hash::Hasher, io::Cursor, sync::Arc};
+use std::{fs::File, hash::Hasher, io::Cursor, path::{Path, PathBuf}, sync::{Arc, LazyLock}};
 
-use ahash::AHasher;
-use async_lock::Mutex;
 use gpui::{App, AppContext, Entity, Global, RenderImage, SharedString, Task};
 use image::{Frame, ImageReader, imageops::thumbnail};
+use moka::future::Cache;
 use smallvec::smallvec;
 use tracing::{debug, error};
 
@@ -13,24 +12,7 @@ use crate::{
     util::rgb_to_bgr,
 };
 
-#[derive(Clone)]
-pub struct AlbumCache {
-    pub cache: Arc<Mutex<moka::future::Cache<u64, Arc<RenderImage>>>>,
-}
-
-impl AlbumCache {
-    pub fn new() -> Self {
-        Self {
-            cache: Arc::new(Mutex::new(moka::future::Cache::new(30))),
-        }
-    }
-}
-
-impl Global for AlbumCache {}
-
-pub fn create_album_cache(cx: &mut App) {
-    cx.set_global(AlbumCache::new());
-}
+static ALBUM_CACHE: LazyLock<Cache<u64, Arc<RenderImage>>> = LazyLock::new(|| Cache::new(30));
 
 fn decode_image(data: Box<[u8]>, thumb: bool) -> anyhow::Result<Arc<RenderImage>> {
     let mut image = ImageReader::new(Cursor::new(data))
@@ -49,8 +31,8 @@ fn decode_image(data: Box<[u8]>, thumb: bool) -> anyhow::Result<Arc<RenderImage>
     Ok(Arc::new(RenderImage::new(smallvec![frame])))
 }
 
-async fn read_metadata(path: String, cache: &mut AlbumCache) -> anyhow::Result<QueueItemUIData> {
-    let file = File::open(&path)?;
+async fn read_metadata(path: PathBuf) -> anyhow::Result<QueueItemUIData> {
+    let file = File::open(path)?;
 
     // TODO: Switch to a different media provider based on the file
     let mut media_provider = SymphoniaProvider::default();
@@ -60,21 +42,19 @@ async fn read_metadata(path: String, cache: &mut AlbumCache) -> anyhow::Result<Q
     let album_art_source = media_provider.read_image().ok().flatten();
 
     let album_art = if let Some(v) = album_art_source {
-        let cache_lock = cache.cache.lock().await;
-
         // hash before hand to avoid storing the entire image as a key
-        let mut hasher = AHasher::default();
+        let mut hasher = rustc_hash::FxHasher::default();
         hasher.write(&v);
         let hash = hasher.finish();
 
-        if let Some(image) = cache_lock.get(&hash).await {
+        if let Some(image) = ALBUM_CACHE.get(&hash).await {
             debug!("read_metadata cache hit for {}", hash);
             Some(image.clone())
         } else {
             let image = decode_image(v, true);
             if let Ok(image) = image {
                 debug!("read_metadata cache miss for {}", hash);
-                cache_lock.insert(hash, image.clone()).await;
+                ALBUM_CACHE.insert(hash, image.clone()).await;
                 Some(image)
             } else if let Err(err) = image {
                 error!("Failed to read image for metadata: {}", err);
@@ -104,7 +84,7 @@ pub trait Decode {
         thumb: bool,
         entity: Entity<Option<Arc<RenderImage>>>,
     ) -> Task<()>;
-    fn read_metadata(&self, path: String, entity: Entity<Option<QueueItemUIData>>) -> Task<()>;
+    fn read_metadata(&self, path: PathBuf, entity: Entity<Option<QueueItemUIData>>) -> Task<()>;
 }
 
 impl Decode for App {
@@ -139,25 +119,21 @@ impl Decode for App {
         })
     }
 
-    fn read_metadata(&self, path: String, entity: Entity<Option<QueueItemUIData>>) -> Task<()> {
-        let mut cache = self.global::<AlbumCache>().clone();
-
+    fn read_metadata(&self, path: PathBuf, entity: Entity<Option<QueueItemUIData>>) -> Task<()> {
         self.spawn(async move |cx| {
-            let read_task = cx
-                .background_spawn(async move { read_metadata(path, &mut cache).await })
-                .await;
-
-            let Ok(metadata) = read_task else {
-                error!("Failed to read metadata - {:?}", read_task);
-                return;
-            };
-
-            entity
-                .update(cx, |m, cx| {
-                    *m = Some(metadata);
-                    cx.notify();
-                })
-                .expect("Failed to update entity");
+            match read_metadata(path).await {
+                Ok(metadata) => {
+                    entity
+                        .update(cx, |m, cx| {
+                            *m = Some(metadata);
+                            cx.notify();
+                        })
+                        .expect("Failed to update entity");
+                },
+                Err(err) => {
+                    error!(?err, "Failed to read metadata: {err}");
+                }
+            }
         })
     }
 }

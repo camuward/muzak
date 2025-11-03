@@ -1,4 +1,4 @@
-use vergen_git2::{Emitter, Git2Builder};
+// use vergen_git2::{Emitter, Git2Builder};
 
 fn main() {
     println!("cargo:rerun-if-changed=.env",);
@@ -11,11 +11,11 @@ fn main() {
         }
     }
 
-    let flags = Git2Builder::default().sha(true).build().unwrap();
+    // let flags = Git2Builder::default().sha(true).build().unwrap();
 
-    Emitter::default()
-        .add_instructions(&flags)
-        .unwrap()
-        .emit()
-        .unwrap();
+    // Emitter::default()
+    //     .add_instructions(&flags)
+    //     .unwrap()
+    //     .emit()
+    //     .unwrap();
 }

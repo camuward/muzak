@@ -5,12 +5,11 @@ use std::{
     time::SystemTime,
 };
 
-use ahash::AHashMap;
+use rustc_hash::FxHashMap;
 use async_channel::{Receiver, Sender};
 use globwalk::GlobWalkerBuilder;
 use gpui::{App, Global};
 use image::{DynamicImage, EncodableLayout, codecs::jpeg::JpegEncoder, imageops::thumbnail};
-use smol::block_on;
 use sqlx::SqlitePool;
 use tracing::{debug, error, info, warn};
 
@@ -49,16 +48,19 @@ enum ScanCommand {
 }
 
 pub struct ScanInterface {
+    executor: tokio::runtime::Handle,
     events_rx: Option<Receiver<ScanEvent>>,
     command_tx: Sender<ScanCommand>,
 }
 
 impl ScanInterface {
     pub(self) fn new(
+        executor: tokio::runtime::Handle,
         events_rx: Option<Receiver<ScanEvent>>,
         command_tx: Sender<ScanCommand>,
     ) -> Self {
         ScanInterface {
+            executor,
             events_rx,
             command_tx,
         }
@@ -66,35 +68,32 @@ impl ScanInterface {
 
     pub fn scan(&self) {
         let command_tx = self.command_tx.clone();
-        smol::spawn(async move {
+        self.executor.spawn(async move {
             command_tx
                 .send(ScanCommand::Scan)
                 .await
                 .expect("could not send tx");
-        })
-        .detach();
+        });
     }
 
     pub fn force_scan(&self) {
         let command_tx = self.command_tx.clone();
-        smol::spawn(async move {
+        self.executor.spawn(async move {
             command_tx
                 .send(ScanCommand::ForceScan)
                 .await
                 .expect("could not send tx");
-        })
-        .detach();
+        });
     }
 
     pub fn stop(&self) {
         let command_tx = self.command_tx.clone();
-        smol::spawn(async move {
+        self.executor.spawn(async move {
             command_tx
                 .send(ScanCommand::Stop)
                 .await
                 .expect("could not send tx");
-        })
-        .detach();
+        });
     }
 
     pub fn start_broadcast(&mut self, cx: &mut App) {
@@ -133,6 +132,7 @@ pub enum ScanState {
 }
 
 pub struct ScanThread {
+    executor: tokio::runtime::Handle,
     event_tx: Sender<ScanEvent>,
     command_rx: Receiver<ScanCommand>,
     pool: SqlitePool,
@@ -142,7 +142,7 @@ pub struct ScanThread {
     to_process: Vec<PathBuf>,
     scan_state: ScanState,
     provider_table: Vec<(&'static [&'static str], Box<dyn MediaProvider>)>,
-    scan_record: AHashMap<PathBuf, u64>,
+    scan_record: FxHashMap<PathBuf, u64>,
     scan_record_path: Option<PathBuf>,
     scanned: u64,
     discovered_total: u64,
@@ -166,9 +166,10 @@ fn build_provider_table() -> Vec<(&'static [&'static str], Box<dyn MediaProvider
 fn file_is_scannable_with_provider(path: &Path, exts: &&[&str]) -> bool {
     for extension in exts.iter() {
         if let Some(ext) = path.extension()
-            && ext == *extension {
-                return true;
-            }
+            && ext == *extension
+        {
+            return true;
+        }
     }
 
     false
@@ -212,14 +213,16 @@ fn scan_path_for_album_art(path: &Path) -> Option<Box<[u8]>> {
 }
 
 impl ScanThread {
-    pub fn start(pool: SqlitePool, settings: ScanSettings) -> ScanInterface {
+    pub fn start(rt: tokio::runtime::Handle, pool: SqlitePool, settings: ScanSettings) -> ScanInterface {
         let (commands_tx, commands_rx) = async_channel::bounded(10);
         let (events_tx, events_rx) = async_channel::unbounded();
 
+        let executor = rt.clone();
         std::thread::Builder::new()
             .name("scanner".to_string())
             .spawn(move || {
                 let mut thread = ScanThread {
+                    executor,
                     event_tx: events_tx,
                     command_rx: commands_rx,
                     pool,
@@ -229,7 +232,7 @@ impl ScanThread {
                     scan_state: ScanState::Idle,
                     provider_table: build_provider_table(),
                     scan_settings: settings,
-                    scan_record: AHashMap::new(),
+                    scan_record: FxHashMap::default(),
                     scan_record_path: None,
                     scanned: 0,
                     discovered_total: 0,
@@ -241,7 +244,7 @@ impl ScanThread {
             })
             .expect("could not start playback thread");
 
-        ScanInterface::new(Some(events_rx), commands_tx)
+        ScanInterface::new(rt, Some(events_rx), commands_tx)
     }
 
     fn run(&mut self) {
@@ -309,13 +312,12 @@ impl ScanThread {
                         self.is_force = false;
 
                         let event_tx = self.event_tx.clone();
-                        smol::spawn(async move {
+                        self.executor.spawn(async move {
                             event_tx
                                 .send(ScanEvent::Cleaning)
                                 .await
                                 .expect("could not send scan started event");
-                        })
-                        .detach();
+                        });
                     }
                 }
                 ScanCommand::ForceScan => {
@@ -331,16 +333,15 @@ impl ScanThread {
                         self.is_force = true;
                         self.force_encountered_albums.clear();
 
-                        self.scan_record = AHashMap::new();
+                        self.scan_record = FxHashMap::default();
 
                         let event_tx = self.event_tx.clone();
-                        smol::spawn(async move {
+                        self.executor.spawn(async move {
                             event_tx
                                 .send(ScanEvent::Cleaning)
                                 .await
                                 .expect("could not send scan started event");
-                        })
-                        .detach();
+                        });
                     }
                 }
                 ScanCommand::Stop => {
@@ -379,9 +380,10 @@ impl ScanThread {
                 continue;
             }
             if let Some(last_scan) = self.scan_record.get(path)
-                && *last_scan == timestamp {
-                    return false;
-                }
+                && *last_scan == timestamp
+            {
+                return false;
+            }
 
             self.scan_record.insert(path.clone(), timestamp);
             return true;
@@ -418,13 +420,12 @@ impl ScanThread {
                 if self.discovered_total.is_multiple_of(20) {
                     let event_tx = self.event_tx.clone();
                     let discovered_total = self.discovered_total;
-                    smol::spawn(async move {
+                    self.executor.spawn(async move {
                         event_tx
                             .send(ScanEvent::DiscoverProgress(discovered_total))
                             .await
                             .expect("could not send discovered event");
-                    })
-                    .detach();
+                    });
                 }
             }
         }
@@ -669,13 +670,14 @@ impl ScanThread {
     fn read_metadata_for_path(&mut self, path: &PathBuf) -> Option<FileInformation> {
         for (exts, provider) in &mut self.provider_table {
             if file_is_scannable_with_provider(path, exts)
-                && let Ok(mut metadata) = scan_file_with_provider(path, provider) {
-                    if metadata.2.is_none() {
-                        metadata.2 = scan_path_for_album_art(path);
-                    }
-
-                    return Some(metadata);
+                && let Ok(mut metadata) = scan_file_with_provider(path, provider)
+            {
+                if metadata.2.is_none() {
+                    metadata.2 = scan_path_for_album_art(path);
                 }
+
+                return Some(metadata);
+            }
         }
 
         None
@@ -702,10 +704,9 @@ impl ScanThread {
             self.write_scan_record();
             self.scan_state = ScanState::Idle;
             let event_tx = self.event_tx.clone();
-            smol::spawn(async move {
+            self.executor.spawn(async move {
                 event_tx.send(ScanEvent::ScanCompleteIdle).await.unwrap();
-            })
-            .detach();
+            });
             return;
         }
 
@@ -713,7 +714,7 @@ impl ScanThread {
         let metadata = self.read_metadata_for_path(&path);
 
         if let Some(metadata) = metadata {
-            let result = block_on(self.update_metadata(metadata, &path));
+            let result = self.executor.clone().block_on(self.update_metadata(metadata, &path));
 
             if let Err(err) = result {
                 error!(
@@ -730,10 +731,9 @@ impl ScanThread {
                     current: self.scanned,
                     total: self.discovered_total,
                 };
-                smol::spawn(async move {
+                self.executor.spawn(async move {
                     event_tx.send(scan_progress).await.unwrap();
-                })
-                .detach();
+                });
             }
         } else {
             warn!("Could not read metadata for file: {:?}", path);
@@ -757,13 +757,14 @@ impl ScanThread {
     // This is done in one shot because it's required for data integrity
     // Cleanup cannot be cancelled
     fn cleanup(&mut self) {
+        let rt = self.executor.clone();
         self.scan_record
             .clone()
             .iter()
             .filter(|v| !v.0.exists())
             .map(|v| v.0)
             .for_each(|v| {
-                block_on(self.delete_track(v));
+                rt.block_on(self.delete_track(v));
             });
 
         self.scan_state = ScanState::Discovering;
