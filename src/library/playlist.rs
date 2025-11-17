@@ -180,7 +180,7 @@ pub fn import_playlist(cx: &mut App, playlist_id: i64) -> anyhow::Result<()> {
                                     "%{}%",
                                     entry
                                         .location
-                                        .file_prefix()
+                                        .file_stem()
                                         .map(OsStr::to_str)
                                         .flatten()
                                         .unwrap_or_default()
