@@ -42,10 +42,10 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: hummingbird-${{ env.ARCH }}.exe
-          path: target/bundle/${{ env.TARGET_TRIPLE }}/release/Hummingbird.exe
+          path: target/bundle/${{ env.TARGET_TRIPLE }}/release/Hummingbird-${{ env.ARCH }}.exe
       - uses: softprops/action-gh-release@v2
         with:
-          files: target/bundle/${{ env.TARGET_TRIPLE }}/release/Hummingbird.exe
+          files: target/bundle/${{ env.TARGET_TRIPLE }}/release/Hummingbird-${{ env.ARCH }}.exe
           prerelease: true
           name: latest
           tag_name: latest
