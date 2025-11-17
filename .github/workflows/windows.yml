@@ -11,7 +11,14 @@ env:
 
 jobs:
   build:
-    runs-on: windows-latest
+    strategy:
+      matrix:
+        os: [windows-latest, windows-11-arm]
+
+    runs-on: ${{ matrix.os }}
+
+    env:
+      ARCH: "${{ endsWith(matrix.os, 'arm') && 'aarch64' || 'x86_64' }}"
 
     permissions:
       contents: write
@@ -20,16 +27,21 @@ jobs:
       - uses: actions/checkout@v4
       - name: Update rust
         run: rustup update
+      - name: Set ENV
+        run: echo "TARGET_TRIPLE=$(rustc -vV | grep 'host:' | cut -d' ' -f2)" >> $GITHUB_ENV
+      - name: Install cntp build tools
+        run: |
+          cargo install --git https://github.com/vicr123/contemporary-rs.git cargo-cntp-bundle
       - uses: Swatinem/rust-cache@v2
       - name: Build
         run: cargo build --verbose --release
       - uses: actions/upload-artifact@v4
         with:
-          name: hummingbird
-          path: target/release/hummingbird.exe
+          name: hummingbird-${{ env.ARCH }}.exe
+          path: target/bundle/${{ env.TARGET_TRIPLE }}/release/Hummingbird.exe
       - uses: softprops/action-gh-release@v2
         with:
-          files: target/release/hummingbird.exe
+          files: target/bundle/${{ env.TARGET_TRIPLE }}/release/Hummingbird.exe
           prerelease: true
           name: latest
           tag_name: latest
