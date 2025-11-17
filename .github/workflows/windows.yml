@@ -38,7 +38,7 @@ jobs:
       - name: Bundle
         run: |
           cargo cntp-bundle --no-open --verbose
-          mv target\bundle\x86_64-pc-windows-msvc\release\Hummingbird.exe target\bundle\x86_64-pc-windows-msvc\release\Hummingbird-${{ env.ARCH }.exe
+          mv target\bundle\${{ env.TARGET_TRIPLE }}\release\Hummingbird.exe target\bundle\${{ env.TARGET_TRIPLE }}\release\Hummingbird-${{ env.ARCH }}.exe
       - uses: actions/upload-artifact@v4
         with:
           name: hummingbird-${{ env.ARCH }}.exe
