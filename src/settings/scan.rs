@@ -24,7 +24,7 @@ fn retrieve_default_paths() -> Vec<PathBuf> {
 
         StorageLibrary::GetLibraryAsync(KnownLibraryId::Music)
             .unwrap()
-            .get()
+            .join()
             .unwrap()
             .Folders()
             .unwrap()

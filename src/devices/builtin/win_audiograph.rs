@@ -48,7 +48,7 @@ impl DeviceProvider for AudioGraphProvider {
         let devices = DeviceInformation::FindAllAsyncDeviceClass(DeviceClass::AudioRender);
 
         Ok(devices
-            .and_then(|v| v.get())?
+            .and_then(|v| v.join())?
             .into_iter()
             .map(|device| Box::new(AudioGraphDevice::from(device)) as Box<dyn Device>)
             .collect())
@@ -61,7 +61,7 @@ impl DeviceProvider for AudioGraphProvider {
     fn get_device_by_uid(&mut self, id: &str) -> Result<Box<dyn Device>, FindError> {
         let devices_result = DeviceInformation::FindAllAsyncDeviceClass(DeviceClass::AudioRender);
 
-        let Ok(devices) = devices_result.and_then(|v| v.get()) else {
+        let Ok(devices) = devices_result.and_then(|v| v.join()) else {
             return Err(FindError::Unknown("couldn't get device".to_string()));
         };
 
@@ -87,7 +87,7 @@ impl AudioGraphDevice {
             AudioGraph::CreateAsync(&settings).expect("Could not create default audio graph!");
 
         let graph = graph_async
-            .get()
+            .join()
             .expect("Waiting for asynchronous operation failed: AudioGraph::CreateAsync");
 
         if let Err(status) = graph.Status() {
@@ -99,7 +99,7 @@ impl AudioGraphDevice {
         let device_out = graph_final
             .CreateDeviceOutputNodeAsync()
             .expect("Could not attach audio device to audio graph")
-            .get()
+            .join()
             .expect("couldn't get attached audio device");
 
         if let Err(status) = device_out.Status() {
@@ -126,7 +126,7 @@ impl From<DeviceInformation> for AudioGraphDevice {
             AudioGraph::CreateAsync(&settings).expect("Could not create default audio graph!");
 
         let graph = graph_async
-            .get()
+            .join()
             .expect("Waiting for asynchronous operation failed: AudioGraph::CreateAsync");
 
         if let Err(status) = graph.Status() {
@@ -138,7 +138,7 @@ impl From<DeviceInformation> for AudioGraphDevice {
         let device_out = graph_final
             .CreateDeviceOutputNodeAsync()
             .expect("Could not attach audio device to audio graph")
-            .get()
+            .join()
             .expect("couldn't get attached audio device");
 
         if let Err(status) = device_out.Status() {

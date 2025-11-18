@@ -61,7 +61,7 @@ dotenvy = "0.15"
 vergen-git2 = { version = "1" }
 
 [target.'cfg(target_os = "windows")'.dependencies]
-windows = { version = "0.61", features = [
+windows = { version = "0.62", features = [
     "Media",
     "Media_Audio",
     "Media_Render",
@@ -73,8 +73,8 @@ windows = { version = "0.61", features = [
     "Win32_System_WinRT",
     "Win32_System_Com",
 ] }
-windows-result = "0.3"
-windows-future = "0.2"
+windows-result = "0.4"
+windows-future = "0.3"
 
 [target.'cfg(target_os = "macos")'.dependencies]
 objc2 = "0.6"
@@ -102,18 +102,3 @@ inherits = "release"
 codegen-units = 1
 lto = "fat"
 opt-level = "s"
-
-[package.metadata.bundle]
-name = "Hummingbird"
-identifier = "org.mailliw.hummingbird"
-category = "public.app-category.music"
-icon = [
-    "./res/icon/32x32.png",
-    "./res/icon/32x32@2x.png",
-    "./res/icon/128x128.png",
-    "./res/icon/128x128@2x.png",
-    "./res/icon/256x256.png",
-    "./res/icon/256x256@2x.png",
-    "./res/icon/512x512.png",
-    "./res/icon/512x512@2x.png",
-]
