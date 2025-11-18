@@ -29,12 +29,34 @@ design standard.
 - Improved library management
 
 # Usage
-Hummingbird hasn't yet seen a full release, but it's already usable.
 
+## Stable Builds
+
+### Windows, macOS and Linux AppImage
+Binaries for these platforms are officially available for 64-bit ARM and Intel architectures.
+See the [latest release](https://github.com/hummingbird-player/hummingbird/releases/latest) for downloads.
+
+### Fedora
+Fedora users can install Hummingbird using the `william341/hummingbird` COPR:
+```bash
+sudo dnf copr enable william341/hummingbird
+sudo dnf install hummingbird
+```
+
+### Arch
+Arch users can install Hummingbird using the `hummingbird-player` AUR package:
+```bash
+paru -S hummingbird-player
+```
+
+## NixOS
+A flake is available for NixOS users. Work towards upstreaming Hummingbird into nixpkgs is
+currently ongoing.
+
+## Unstable Builds
 The latest commit is built using Github Actions and uploaded to the
 [latest](https://github.com/143mailliw/hummingbird/releases/tag/latest) tag
-automatically. The macOS binary is signed and notarized, and should work on
-most macOS versions out of the box.
+automatically. Windows installers aren't available for unstable builds.
 
 ## Building
 For more detailed instructions, see the [Building](docs/building.md) documentation.
