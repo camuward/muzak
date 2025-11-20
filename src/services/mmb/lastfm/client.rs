@@ -26,6 +26,11 @@ impl LastFMClient {
         }
     }
 
+    pub fn from_global() -> Option<Self> {
+        let &(key, secret) = super::LASTFM_CREDS.as_ref()?;
+        Some(LastFMClient::new(key.to_owned(), secret.to_owned()))
+    }
+
     pub fn _set_endpoint<U: TryInto<url::Url>>(
         &mut self,
         endpoint: U,

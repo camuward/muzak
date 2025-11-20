@@ -1,4 +1,7 @@
-use std::{path::PathBuf, sync::Arc};
+use std::{
+    path::PathBuf,
+    sync::{Arc, LazyLock},
+};
 
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
@@ -12,8 +15,15 @@ use super::MediaMetadataBroadcastService;
 pub mod client;
 pub mod types;
 
-pub const LASTFM_API_KEY: Option<&'static str> = option_env!("LASTFM_API_KEY");
-pub const LASTFM_API_SECRET: Option<&'static str> = option_env!("LASTFM_API_SECRET");
+pub static LASTFM_CREDS: LazyLock<Option<(&str, &str)>> = LazyLock::new(|| {
+    let key = std::env::var("LASTFM_API_KEY")
+        .map_or(None, |k| Some(&*k.leak()))
+        .or(option_env!("LASTFM_API_KEY"))?;
+    let secret = std::env::var("LASTFM_API_SECRET")
+        .map_or(None, |k| Some(&*k.leak()))
+        .or(option_env!("LASTFM_API_SECRET"))?;
+    Some((key, secret))
+});
 
 pub struct LastFM {
     client: LastFMClient,

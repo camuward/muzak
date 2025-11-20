@@ -5,7 +5,7 @@ use prelude::FluentBuilder;
 
 use crate::{
     library::scan::ScanEvent,
-    services::mmb::lastfm::{LASTFM_API_KEY, LASTFM_API_SECRET},
+    services::mmb::lastfm::LASTFM_CREDS,
     ui::components::icons::{CROSS, FOLDER_CHECK, FOLDER_SEARCH, MAXIMIZE, MINUS, icon},
 };
 
@@ -18,11 +18,7 @@ pub struct Header {
 
 impl Header {
     pub fn new(cx: &mut App) -> Entity<Self> {
-        let lastfm = if LASTFM_API_SECRET.is_some() && LASTFM_API_KEY.is_some() {
-            Some(lastfm::LastFM::new(cx))
-        } else {
-            None
-        };
+        let lastfm = LASTFM_CREDS.map(|_| lastfm::LastFM::new(cx));
 
         cx.new(|cx| Self {
             scan_status: ScanStatus::new(cx),

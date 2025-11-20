@@ -9,7 +9,7 @@ use gpui::{App, AppContext, Entity, EventEmitter, Global, RenderImage};
 use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
 use tokio::sync::Mutex;
-use tracing::{debug, error, warn};
+use tracing::{debug, error, info, warn};
 
 use crate::{
     library::scan::ScanEvent,
@@ -21,7 +21,7 @@ use crate::{
     },
     services::mmb::{
         MediaMetadataBroadcastService,
-        lastfm::{LASTFM_API_KEY, LASTFM_API_SECRET, LastFM, client::LastFMClient, types::Session},
+        lastfm::{LastFM, client::LastFMClient, types::Session},
     },
     settings::{SettingsGlobal, storage::StorageData},
     ui::{app::get_dirs, data::Decode, library::ViewSwitchMessage},
@@ -270,12 +270,17 @@ pub fn build_models(cx: &mut App, queue: Queue, storage_data: &StorageData) {
 }
 
 pub fn create_last_fm_mmbs(cx: &mut App, mmbs_list: &Entity<MMBSList>, session: String) {
-    if let (Some(key), Some(secret)) = (LASTFM_API_KEY, LASTFM_API_SECRET) {
-        let mut client = LastFMClient::new(key.to_string(), secret.to_string());
+    if let Some(mut client) = LastFMClient::from_global() {
         client.set_session(session);
         let mmbs = LastFM::new(client);
         mmbs_list.update(cx, |m, _| {
             m.0.insert("lastfm".to_string(), Arc::new(Mutex::new(mmbs)));
         })
+    } else {
+        warn!(
+            "Last.fm authentication disabled. \
+            Set `LASTFM_API_KEY` and `LASTFM_API_SECRET` to allow connecting to Last.fm."
+        );
+        info!("These can additionally be set at compile time to bake them into the binary.");
     }
 }
