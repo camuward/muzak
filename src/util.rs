@@ -17,14 +17,4 @@ macro_rules! make_unknown_error {
     };
 }
 
-macro_rules! make_unknown_error_unwrap {
-    ($from:ty, $to:ty) => {
-        impl From<$from> for $to {
-            fn from(value: $from) -> Self {
-                <$to>::Unknown(value.to_string().unwrap())
-            }
-        }
-    };
-}
-
 pub(crate) use make_unknown_error;
