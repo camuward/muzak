@@ -13,17 +13,18 @@ runtime_shaders = ["gpui/runtime_shaders"]
 [dependencies]
 anyhow = "1"
 async-trait = "0.1"
+base64 = "0.22"
 bitflags = "2"
 chrono = "0.4"
 clap = { version = "4", features = ["derive"] }
 cpal = "0.16"
 dateparser = "0.2"
 directories = "6"
+futures = "0.3"
 globwalk = "0.9"
-futures = { version = "0.3", default-features = false }
 gpui = "0.2"
 image = "0.25"
-indexmap = { version = "2", features = ["std", "serde"] }
+indexmap = { version = "2", features = ["serde"] }
 intx = "0.1"
 md5 = "0.8"
 moka = { version = "0.12", features = ["future"] }
@@ -31,14 +32,16 @@ notify = "8"
 nucleo = "0.5"
 open = "5"
 rand = "0.9"
+raw-window-handle = "0.6"
 rb = "0.4"
+regex = "1"
 rubato = "0.16"
 rust-embed = "8"
 rustc-hash = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 smallvec = "1"
-sqlx = { version = "0.8", features = ["runtime-tokio", "sqlite", "chrono"] }
+sqlx = { version = "0.8", features = ["chrono", "runtime-tokio", "sqlite"] }
 symphonia = { version = "0.5", features = ["all", "opt-simd-sse"] }
 thiserror = "2"
 tokio = { version = "1", features = ["rt-multi-thread"] }
@@ -52,9 +55,6 @@ zed-reqwest = { version = "0.12.15-zed", default-features = false, features = [
     "macos-system-configuration",
     "rustls-tls-native-roots",
 ] }
-raw-window-handle = "0.6"
-regex = "1"
-base64 = "0.22"
 
 [build-dependencies]
 dotenvy = "0.15"
@@ -62,32 +62,32 @@ vergen-git2 = { version = "1" }
 
 [target.'cfg(target_os = "windows")'.dependencies]
 windows = { version = "0.62", features = [
-    "Media",
-    "Media_Audio",
-    "Media_Render",
-    "Media_MediaProperties",
     "Devices_Enumeration",
     "Foundation_Collections",
-    "Storage_Streams",
+    "Media",
+    "Media_Audio",
+    "Media_MediaProperties",
+    "Media_Render",
     "Storage_Search",
-    "Win32_System_WinRT",
+    "Storage_Streams",
     "Win32_System_Com",
+    "Win32_System_WinRT",
 ] }
-windows-result = "0.4"
 windows-future = "0.3"
+windows-result = "0.4"
 
 [target.'cfg(target_os = "macos")'.dependencies]
+block2 = "0.6"
+imagesize = "0.14"
 objc2 = "0.6"
+objc2-app-kit = { version = "0.3", features = ["NSImage"] }
+objc2-core-foundation = { version = "0.3", features = ["CFCGTypes"] }
 objc2-foundation = { version = "0.3", features = [
+    "NSData",
     "NSDictionary",
     "NSValue",
-    "NSData",
 ] }
-objc2-core-foundation = { version = "0.3", features = ["CFCGTypes"] }
-objc2-app-kit = { version = "0.3", features = ["NSImage"] }
 objc2-media-player = { version = "0.3", features = ["MPNowPlayingInfoCenter"] }
-imagesize = "0.14"
-block2 = "0.6"
 
 [target.'cfg(target_os = "linux")'.dependencies]
 mpris-server = "0.9"
