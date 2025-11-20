@@ -12,6 +12,7 @@ package/inno/Output/*.exe
 
 **/.DS_Store
 .env
+.cargo/
 .idea/
 .vscode/
 .zed/
