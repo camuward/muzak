@@ -1,8 +1,9 @@
+use futures::{FutureExt, TryFutureExt};
 use gpui::*;
 use tracing::error;
 
 use crate::{
-    services::mmb::lastfm::{LASTFM_API_KEY, LASTFM_API_SECRET, client::LastFMClient},
+    services::mmb::lastfm::{LASTFM_CREDS, client::LastFMClient},
     ui::{
         components::icons::{LAST_FM, icon},
         models::{LastFMState, Models},
@@ -100,63 +101,62 @@ impl Render for LastFM {
 }
 
 fn get_token(cx: &mut App, state: Entity<LastFMState>) {
-    cx.spawn(async move |cx| {
-        let call = crate::RUNTIME
-            .spawn(async {
-                let mut client = LastFMClient::new(
-                    LASTFM_API_KEY.unwrap().to_string(),
-                    LASTFM_API_SECRET.unwrap().to_string(),
-                );
-                client.get_token().await
-            })
-            .await;
+    let get_token = crate::RUNTIME
+        .spawn(async { LastFMClient::from_global().unwrap().get_token().await })
+        .err_into()
+        .map(Result::flatten);
 
-        if let Ok(Ok(token)) = call {
-            let path = format!(
-                "http://last.fm/api/auth/?api_key={}&token={}",
-                LASTFM_API_KEY.unwrap(),
-                token
+    cx.spawn(async move |cx| {
+        let token = get_token.await.inspect_err(|err| {
+            error!(?err, "error getting last.fm token: {err}");
+        })?;
+
+        let (key, _) = LASTFM_CREDS.unwrap();
+        let url = String::from(url::Url::parse_with_params(
+            "http://last.fm/api/auth",
+            [("api_key", key), ("token", &token)],
+        )?);
+
+        if let Err(err) = open::that(&url) {
+            error!(
+                ?err,
+                "Failed to open web browser to {url}; \
+                you'll need to navigate to it manually."
             );
-            if open::that(&path).is_err() {
-                error!(
-                    "Failed to open web browser to {}; you'll need to navigate to it manually.",
-                    path
-                );
-            }
-            state
-                .update(cx, move |m, cx| {
-                    *m = LastFMState::AwaitingFinalization(token);
-                    cx.notify();
-                })
-                .expect("failed to update lastfm state");
-        } else {
-            error!("error getting token");
         }
+
+        state
+            .update(cx, move |m, cx| {
+                *m = LastFMState::AwaitingFinalization(token);
+                cx.notify();
+            })
+            .expect("failed to update lastfm state");
+
+        anyhow::Ok(())
     })
     .detach();
 }
 
 fn confirm(cx: &mut App, state: Entity<LastFMState>, token: String) {
+    let get_session = crate::RUNTIME
+        .spawn(async move {
+            let mut client = LastFMClient::from_global().unwrap();
+            client.get_session(&token).await
+        })
+        .err_into()
+        .map(Result::flatten);
     cx.spawn(async move |cx| {
-        let call = crate::RUNTIME
-            .spawn(async move {
-                let mut client = LastFMClient::new(
-                    LASTFM_API_KEY.unwrap().to_string(),
-                    LASTFM_API_SECRET.unwrap().to_string(),
-                );
-                client.get_session(&token).await
-            })
-            .await;
+        let session = get_session.await.inspect_err(|err| {
+            error!(?err, "error getting last.fm session: {err}");
+        })?;
 
-        if let Ok(Ok(session)) = call {
-            state
-                .update(cx, move |_, cx| {
-                    cx.emit(session);
-                })
-                .expect("failed to emit session event");
-        } else {
-            error!("error getting session")
-        }
+        state
+            .update(cx, move |_, cx| {
+                cx.emit(session);
+            })
+            .expect("failed to emit session event");
+
+        anyhow::Ok(())
     })
     .detach();
 }
