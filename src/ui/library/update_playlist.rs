@@ -13,13 +13,10 @@ use crate::{
         playlist::import_playlist,
         types::{PlaylistType, PlaylistWithCount},
     },
-    ui::{
-        components::{
-            icons::{PLAYLIST, PLAYLIST_ADD, STAR_FILLED},
-            modal::modal,
-            palette::{ExtraItem, ExtraItemProvider, FinderItemLeft, Palette, PaletteItem},
-        },
-        models::{Models, PlaylistEvent},
+    ui::components::{
+        icons::{PLAYLIST, PLAYLIST_ADD, STAR_FILLED},
+        modal::modal,
+        palette::{ExtraItem, ExtraItemProvider, FinderItemLeft, Palette, PaletteItem},
     },
 };
 
