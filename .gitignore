@@ -14,3 +14,4 @@ package/inno/Output/*.exe
 .env
 .idea/
 .vscode/
+.zed/
