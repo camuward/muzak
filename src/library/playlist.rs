@@ -181,8 +181,7 @@ pub fn import_playlist(cx: &mut App, playlist_id: i64) -> anyhow::Result<()> {
                                     entry
                                         .location
                                         .file_stem()
-                                        .map(OsStr::to_str)
-                                        .flatten()
+                                        .and_then(OsStr::to_str)
                                         .unwrap_or_default()
                                 ))
                                 .fetch_one(&pool)
