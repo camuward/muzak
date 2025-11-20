@@ -77,9 +77,10 @@
           adapters = lib.flatten [
             (lib.optional isLinux pkgs.stdenvAdapters.useMoldLinker)
           ];
-          craneLib = (inputs.crane.mkLib pkgs).overrideToolchain (rust-bin.stable.latest.default.override {
-            extensions = ["rust-analyzer" "rust-src" "clippy" "rustfmt"];
-          });
+          craneLib = (inputs.crane.mkLib pkgs).overrideToolchain (rust-bin.selectLatestNightlyWith (toolchain:
+            toolchain.default.override {
+              extensions = ["rust-analyzer" "rust-src" "clippy" "rustfmt"];
+            }));
           craneDevShell = craneLib.devShell.override {
             mkShell = pkgs.mkShell.override {
               stdenv = builtins.foldl' (acc: adapter: adapter acc) pkgs.llvmPackages_latest.stdenv adapters;
@@ -88,7 +89,7 @@
         in
           craneDevShell {
             inherit (self') checks;
-            packages = [pkgs.bacon];
+            packages = [pkgs.sqlite-interactive];
 
             LD_LIBRARY_PATH = lib.optionalString isLinux (
               lib.makeLibraryPath [
@@ -98,7 +99,11 @@
             );
 
             shellHook = ''
-              rustc -Vv
+              (
+                set -x
+                rustc -Vv
+                clang -v
+              )
             '';
           };
       };
