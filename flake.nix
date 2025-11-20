@@ -25,40 +25,44 @@
         toolchain = rust-bin.fromRustupToolchainFile ./rust-toolchain.toml;
         craneLib = (inputs.crane.mkLib pkgs).overrideToolchain toolchain;
 
-        depsArgs = {
-          src = lib.fileset.toSource rec {
-            root = ./.;
-            fileset = lib.fileset.unions [
-              (craneLib.fileset.commonCargoSources root)
-              (lib.fileset.fileFilter (file: file.hasExt "sql") root)
-              (lib.fileset.maybeMissing ./assets)
+        mkArgs = overlay:
+          lib.fix (lib.extends (lib.toExtension overlay) (_: {
+            src = lib.fileset.toSource rec {
+              root = ./.;
+              fileset = lib.fileset.unions [
+                (craneLib.fileset.commonCargoSources root)
+                (lib.fileset.fileFilter (file: file.hasExt "sql") root)
+                (lib.fileset.maybeMissing ./assets)
+              ];
+            };
+            nativeBuildInputs = [pkgs.pkg-config];
+            buildInputs = lib.flatten [
+              pkgs.openssl
+              (lib.optionals isLinux [
+                pkgs.libxkbcommon
+                pkgs.xorg.libxcb
+                pkgs.xorg.libX11
+                (pkgs.alsa-lib-with-plugins.override {
+                  plugins = [pkgs.alsa-plugins pkgs.pipewire];
+                })
+              ])
+              (lib.optionals isDarwin [
+                pkgs.apple-sdk_15
+                (pkgs.darwinMinVersionHook "10.15")
+              ])
             ];
-          };
-          nativeBuildInputs = [pkgs.pkg-config];
-          buildInputs = lib.flatten [
-            pkgs.openssl
-            (lib.optionals isLinux [
-              pkgs.libxkbcommon
-              pkgs.xorg.libxcb
-              pkgs.xorg.libX11
-              (pkgs.alsa-lib-with-plugins.override {
-                plugins = [pkgs.alsa-plugins pkgs.pipewire];
-              })
-            ])
-            (lib.optionals isDarwin [
-              pkgs.apple-sdk_15
-              (pkgs.darwinMinVersionHook "10.15")
-            ])
-          ];
-          cargoExtraArgs = "--features=hummingbird/runtime_shaders";
-        };
-        craneArgs = depsArgs // {cargoArtifacts = craneLib.buildDepsOnly depsArgs;};
+            cargoExtraArgs = "--features=hummingbird/runtime_shaders";
+          }));
+        craneArgs = mkArgs (prev: {cargoArtifacts = craneLib.buildDepsOnly prev;});
       in {
         formatter = pkgs.alejandra;
         apps = builtins.mapAttrs (_: pkg: {program = pkg + /bin/hummingbird;}) self'.packages;
-        packages.default = craneLib.buildPackage (lib.mergeAttrs depsArgs (lib.optionalAttrs isLinux {
-          nativeBuildInputs = depsArgs.nativeBuildInputs ++ [pkgs.autoPatchelfHook];
-          runtimeDependencies = [
+        packages.default = craneLib.buildPackage (mkArgs (prev: {
+          CARGO_PROFILE = "release-distro";
+          nativeBuildInputs =
+            prev.nativeBuildInputs
+            ++ lib.optionals isLinux [pkgs.autoPatchelfHook];
+          runtimeDependencies = lib.optionals isLinux [
             pkgs.wayland
             pkgs.vulkan-loader
           ];
