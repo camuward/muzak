@@ -93,7 +93,11 @@ block2 = "0.6"
 mpris-server = "0.9"
 zbus = "5"
 
+[profile.dev]
+split-debuginfo = "unpacked"
+
 [profile.release]
+opt-level = "s"
 lto = "thin"
 strip = "symbols"
 
@@ -101,4 +105,5 @@ strip = "symbols"
 inherits = "release"
 codegen-units = 1
 lto = "fat"
-opt-level = "s"
+debug = "full"
+split-debuginfo = "packed"
