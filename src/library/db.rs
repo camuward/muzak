@@ -14,7 +14,7 @@ use crate::{
 
 use super::types::{Album, Artist, Track};
 
-pub async fn create_pool(path: impl AsRef<Path>) -> Result<SqlitePool, sqlx::Error> {
+pub async fn create_pool(path: impl AsRef<Path>) -> sqlx::Result<SqlitePool> {
     debug!("Creating database pool at {:?}", path.as_ref());
     let options = SqliteConnectOptions::new()
         .filename(path)
@@ -83,7 +83,7 @@ pub enum AlbumMethod {
 pub async fn list_albums(
     pool: &SqlitePool,
     sort_method: AlbumSortMethod,
-) -> Result<Vec<(u32, String)>, sqlx::Error> {
+) -> sqlx::Result<Vec<(u32, String)>> {
     let query = match sort_method {
         AlbumSortMethod::TitleAsc => {
             include_str!("../../queries/library/find_albums_title_asc.sql")
@@ -127,7 +127,7 @@ pub async fn list_albums(
 pub async fn list_tracks_in_album(
     pool: &SqlitePool,
     album_id: i64,
-) -> Result<Arc<Vec<Track>>, sqlx::Error> {
+) -> sqlx::Result<Arc<Vec<Track>>> {
     let query = include_str!("../../queries/library/find_tracks_in_album.sql");
 
     let albums = Arc::new(
@@ -144,7 +144,7 @@ pub async fn get_album_by_id(
     pool: &SqlitePool,
     album_id: i64,
     method: AlbumMethod,
-) -> Result<Arc<Album>, sqlx::Error> {
+) -> sqlx::Result<Arc<Album>> {
     let query = include_str!("../../queries/library/find_album_by_id.sql");
 
     let album: Arc<Album> = Arc::new({
@@ -165,10 +165,7 @@ pub async fn get_album_by_id(
     Ok(album)
 }
 
-pub async fn get_artist_name_by_id(
-    pool: &SqlitePool,
-    artist_id: i64,
-) -> Result<Arc<String>, sqlx::Error> {
+pub async fn get_artist_name_by_id(pool: &SqlitePool, artist_id: i64) -> sqlx::Result<Arc<String>> {
     let query = include_str!("../../queries/library/find_artist_name_by_id.sql");
 
     let artist_name: Arc<String> = Arc::new(
@@ -181,10 +178,7 @@ pub async fn get_artist_name_by_id(
     Ok(artist_name)
 }
 
-pub async fn get_artist_by_id(
-    pool: &SqlitePool,
-    artist_id: i64,
-) -> Result<Arc<Artist>, sqlx::Error> {
+pub async fn get_artist_by_id(pool: &SqlitePool, artist_id: i64) -> sqlx::Result<Arc<Artist>> {
     let query = include_str!("../../queries/library/find_artist_by_id.sql");
 
     let artist: Arc<Artist> = Arc::new(
@@ -197,7 +191,7 @@ pub async fn get_artist_by_id(
     Ok(artist)
 }
 
-pub async fn get_track_by_id(pool: &SqlitePool, track_id: i64) -> Result<Arc<Track>, sqlx::Error> {
+pub async fn get_track_by_id(pool: &SqlitePool, track_id: i64) -> sqlx::Result<Arc<Track>> {
     let query = include_str!("../../queries/library/find_track_by_id.sql");
 
     let track: Arc<Track> = Arc::new(sqlx::query_as(query).bind(track_id).fetch_one(pool).await?);
@@ -207,9 +201,7 @@ pub async fn get_track_by_id(pool: &SqlitePool, track_id: i64) -> Result<Arc<Tra
 
 /// Lists all albums for searching. Returns a vector of tuples containing the id, name, and artist
 /// name.
-pub async fn list_albums_search(
-    pool: &SqlitePool,
-) -> Result<Vec<(u32, String, String)>, sqlx::Error> {
+pub async fn list_albums_search(pool: &SqlitePool) -> sqlx::Result<Vec<(u32, String, String)>> {
     let query = include_str!("../../queries/library/find_albums_search.sql");
 
     let albums = sqlx::query_as::<_, (u32, String, String)>(query)
@@ -223,7 +215,7 @@ pub async fn add_playlist_item(
     pool: &SqlitePool,
     playlist_id: i64,
     track_id: i64,
-) -> Result<i64, sqlx::Error> {
+) -> sqlx::Result<i64> {
     let query = include_str!("../../queries/playlist/add_track.sql");
 
     let id = sqlx::query(query)
@@ -236,7 +228,7 @@ pub async fn add_playlist_item(
     Ok(id)
 }
 
-pub async fn create_playlist(pool: &SqlitePool, name: &str) -> Result<i64, sqlx::Error> {
+pub async fn create_playlist(pool: &SqlitePool, name: &str) -> sqlx::Result<i64> {
     let query = include_str!("../../queries/playlist/create_playlist.sql");
 
     let playlist_id = sqlx::query(query)
@@ -248,7 +240,7 @@ pub async fn create_playlist(pool: &SqlitePool, name: &str) -> Result<i64, sqlx:
     Ok(playlist_id)
 }
 
-pub async fn delete_playlist(pool: &SqlitePool, playlist_id: i64) -> Result<(), sqlx::Error> {
+pub async fn delete_playlist(pool: &SqlitePool, playlist_id: i64) -> sqlx::Result<()> {
     let query = include_str!("../../queries/playlist/delete_playlist.sql");
 
     sqlx::query(query).bind(playlist_id).execute(pool).await?;
@@ -256,9 +248,7 @@ pub async fn delete_playlist(pool: &SqlitePool, playlist_id: i64) -> Result<(), 
     Ok(())
 }
 
-pub async fn get_all_playlists(
-    pool: &SqlitePool,
-) -> Result<Arc<Vec<PlaylistWithCount>>, sqlx::Error> {
+pub async fn get_all_playlists(pool: &SqlitePool) -> sqlx::Result<Arc<Vec<PlaylistWithCount>>> {
     let query = include_str!("../../queries/playlist/get_all_playlists.sql");
 
     let playlists: Vec<PlaylistWithCount> = sqlx::query_as(query).fetch_all(pool).await?;
@@ -266,10 +256,7 @@ pub async fn get_all_playlists(
     Ok(Arc::new(playlists))
 }
 
-pub async fn get_playlist(
-    pool: &SqlitePool,
-    playlist_id: i64,
-) -> Result<Arc<Playlist>, sqlx::Error> {
+pub async fn get_playlist(pool: &SqlitePool, playlist_id: i64) -> sqlx::Result<Arc<Playlist>> {
     let query = include_str!("../../queries/playlist/get_playlist.sql");
 
     let playlist: Playlist = sqlx::query_as(query)
@@ -283,7 +270,7 @@ pub async fn get_playlist(
 pub async fn get_playlist_track_files(
     pool: &SqlitePool,
     playlist_id: i64,
-) -> Result<Arc<Vec<String>>, sqlx::Error> {
+) -> sqlx::Result<Arc<Vec<String>>> {
     let query = include_str!("../../queries/playlist/get_track_files.sql");
 
     let track_files: Vec<(String,)> = sqlx::query_as(query)
@@ -298,7 +285,7 @@ pub async fn get_playlist_track_files(
 pub async fn get_playlist_tracks(
     pool: &SqlitePool,
     playlist_id: i64,
-) -> Result<Arc<Vec<(i64, i64, i64)>>, sqlx::Error> {
+) -> sqlx::Result<Arc<Vec<(i64, i64, i64)>>> {
     let query = include_str!("../../queries/playlist/get_track_listing.sql");
 
     let tracks: Vec<(i64, i64, i64)> = sqlx::query_as(query)
@@ -313,7 +300,7 @@ pub async fn move_playlist_item(
     pool: &SqlitePool,
     item_id: i64,
     new_position: i64,
-) -> Result<(), sqlx::Error> {
+) -> sqlx::Result<()> {
     // retrieve the current item's position
     let original_item = get_playlist_item(pool, item_id).await?;
 
@@ -340,7 +327,7 @@ pub async fn move_playlist_item(
     Ok(())
 }
 
-pub async fn remove_playlist_item(pool: &SqlitePool, item_id: i64) -> Result<(), sqlx::Error> {
+pub async fn remove_playlist_item(pool: &SqlitePool, item_id: i64) -> sqlx::Result<()> {
     let query = include_str!("../../queries/playlist/remove_track.sql");
     let item = get_playlist_item(pool, item_id).await?;
 
@@ -353,10 +340,7 @@ pub async fn remove_playlist_item(pool: &SqlitePool, item_id: i64) -> Result<(),
     Ok(())
 }
 
-pub async fn get_playlist_item(
-    pool: &SqlitePool,
-    item_id: i64,
-) -> Result<PlaylistItem, sqlx::Error> {
+pub async fn get_playlist_item(pool: &SqlitePool, item_id: i64) -> sqlx::Result<PlaylistItem> {
     let query = include_str!("../../queries/playlist/select_playlist_item.sql");
 
     let item: PlaylistItem = sqlx::query_as(query).bind(item_id).fetch_one(pool).await?;
@@ -364,7 +348,7 @@ pub async fn get_playlist_item(
     Ok(item)
 }
 
-pub async fn get_track_stats(pool: &SqlitePool) -> Result<Arc<TrackStats>, sqlx::Error> {
+pub async fn get_track_stats(pool: &SqlitePool) -> sqlx::Result<Arc<TrackStats>> {
     let query = include_str!("../../queries/track_stats.sql");
 
     let stats: TrackStats = sqlx::query_as(query).fetch_one(pool).await?;
@@ -376,7 +360,7 @@ pub async fn playlist_has_track(
     pool: &SqlitePool,
     playlist_id: i64,
     track_id: i64,
-) -> Result<Option<i64>, sqlx::Error> {
+) -> sqlx::Result<Option<i64>> {
     let query = include_str!("../../queries/playlist/playlist_has_track.sql");
 
     let has_track: Option<i64> = sqlx::query_scalar(query)
@@ -389,143 +373,121 @@ pub async fn playlist_has_track(
 }
 
 pub trait LibraryAccess {
-    fn list_albums(&self, sort_method: AlbumSortMethod) -> Result<Vec<(u32, String)>, sqlx::Error>;
-    fn list_tracks_in_album(&self, album_id: i64) -> Result<Arc<Vec<Track>>, sqlx::Error>;
-    fn get_album_by_id(
-        &self,
-        album_id: i64,
-        method: AlbumMethod,
-    ) -> Result<Arc<Album>, sqlx::Error>;
-    fn get_artist_name_by_id(&self, artist_id: i64) -> Result<Arc<String>, sqlx::Error>;
-    fn get_artist_by_id(&self, artist_id: i64) -> Result<Arc<Artist>, sqlx::Error>;
-    fn get_track_by_id(&self, track_id: i64) -> Result<Arc<Track>, sqlx::Error>;
-    fn list_albums_search(&self) -> Result<Vec<(u32, String, String)>, sqlx::Error>;
-    fn add_playlist_item(&self, playlist_id: i64, track_id: i64) -> Result<i64, sqlx::Error>;
-    fn create_playlist(&self, name: &str) -> Result<i64, sqlx::Error>;
-    fn delete_playlist(&self, playlist_id: i64) -> Result<(), sqlx::Error>;
-    fn get_all_playlists(&self) -> Result<Arc<Vec<PlaylistWithCount>>, sqlx::Error>;
-    fn get_playlist(&self, playlist_id: i64) -> Result<Arc<Playlist>, sqlx::Error>;
-    fn get_playlist_track_files(&self, playlist_id: i64) -> Result<Arc<Vec<String>>, sqlx::Error>;
-    fn get_playlist_tracks(
-        &self,
-        playlist_id: i64,
-    ) -> Result<Arc<Vec<(i64, i64, i64)>>, sqlx::Error>;
-    fn move_playlist_item(&self, item_id: i64, new_position: i64) -> Result<(), sqlx::Error>;
-    fn remove_playlist_item(&self, item_id: i64) -> Result<(), sqlx::Error>;
-    fn get_playlist_item(&self, item_id: i64) -> Result<PlaylistItem, sqlx::Error>;
-    fn get_track_stats(&self) -> Result<Arc<TrackStats>, sqlx::Error>;
-    fn playlist_has_track(
-        &self,
-        playlist_id: i64,
-        track_id: i64,
-    ) -> Result<Option<i64>, sqlx::Error>;
+    fn list_albums(&self, sort_method: AlbumSortMethod) -> sqlx::Result<Vec<(u32, String)>>;
+    fn list_tracks_in_album(&self, album_id: i64) -> sqlx::Result<Arc<Vec<Track>>>;
+    fn get_album_by_id(&self, album_id: i64, method: AlbumMethod) -> sqlx::Result<Arc<Album>>;
+    fn get_artist_name_by_id(&self, artist_id: i64) -> sqlx::Result<Arc<String>>;
+    fn get_artist_by_id(&self, artist_id: i64) -> sqlx::Result<Arc<Artist>>;
+    fn get_track_by_id(&self, track_id: i64) -> sqlx::Result<Arc<Track>>;
+    fn list_albums_search(&self) -> sqlx::Result<Vec<(u32, String, String)>>;
+    fn add_playlist_item(&self, playlist_id: i64, track_id: i64) -> sqlx::Result<i64>;
+    fn create_playlist(&self, name: &str) -> sqlx::Result<i64>;
+    fn delete_playlist(&self, playlist_id: i64) -> sqlx::Result<()>;
+    fn get_all_playlists(&self) -> sqlx::Result<Arc<Vec<PlaylistWithCount>>>;
+    fn get_playlist(&self, playlist_id: i64) -> sqlx::Result<Arc<Playlist>>;
+    fn get_playlist_track_files(&self, playlist_id: i64) -> sqlx::Result<Arc<Vec<String>>>;
+    fn get_playlist_tracks(&self, playlist_id: i64) -> sqlx::Result<Arc<Vec<(i64, i64, i64)>>>;
+    fn move_playlist_item(&self, item_id: i64, new_position: i64) -> sqlx::Result<()>;
+    fn remove_playlist_item(&self, item_id: i64) -> sqlx::Result<()>;
+    fn get_playlist_item(&self, item_id: i64) -> sqlx::Result<PlaylistItem>;
+    fn get_track_stats(&self) -> sqlx::Result<Arc<TrackStats>>;
+    fn playlist_has_track(&self, playlist_id: i64, track_id: i64) -> sqlx::Result<Option<i64>>;
 }
 
 impl LibraryAccess for App {
-    fn list_albums(&self, sort_method: AlbumSortMethod) -> Result<Vec<(u32, String)>, sqlx::Error> {
+    fn list_albums(&self, sort_method: AlbumSortMethod) -> sqlx::Result<Vec<(u32, String)>> {
         let pool: &Pool = self.global();
         crate::RUNTIME.block_on(list_albums(&pool.0, sort_method))
     }
 
-    fn list_tracks_in_album(&self, album_id: i64) -> Result<Arc<Vec<Track>>, sqlx::Error> {
+    fn list_tracks_in_album(&self, album_id: i64) -> sqlx::Result<Arc<Vec<Track>>> {
         let pool: &Pool = self.global();
         crate::RUNTIME.block_on(list_tracks_in_album(&pool.0, album_id))
     }
 
-    fn get_album_by_id(
-        &self,
-        album_id: i64,
-        method: AlbumMethod,
-    ) -> Result<Arc<Album>, sqlx::Error> {
+    fn get_album_by_id(&self, album_id: i64, method: AlbumMethod) -> sqlx::Result<Arc<Album>> {
         let pool: &Pool = self.global();
         crate::RUNTIME.block_on(get_album_by_id(&pool.0, album_id, method))
     }
 
-    fn get_artist_name_by_id(&self, artist_id: i64) -> Result<Arc<String>, sqlx::Error> {
+    fn get_artist_name_by_id(&self, artist_id: i64) -> sqlx::Result<Arc<String>> {
         let pool: &Pool = self.global();
         crate::RUNTIME.block_on(get_artist_name_by_id(&pool.0, artist_id))
     }
 
-    fn get_artist_by_id(&self, artist_id: i64) -> Result<Arc<Artist>, sqlx::Error> {
+    fn get_artist_by_id(&self, artist_id: i64) -> sqlx::Result<Arc<Artist>> {
         let pool: &Pool = self.global();
         crate::RUNTIME.block_on(get_artist_by_id(&pool.0, artist_id))
     }
 
-    fn get_track_by_id(&self, track_id: i64) -> Result<Arc<Track>, sqlx::Error> {
+    fn get_track_by_id(&self, track_id: i64) -> sqlx::Result<Arc<Track>> {
         let pool: &Pool = self.global();
         crate::RUNTIME.block_on(get_track_by_id(&pool.0, track_id))
     }
 
     /// Lists all albums for searching. Returns a vector of tuples containing the id, name, and artist
     /// name.
-    fn list_albums_search(&self) -> Result<Vec<(u32, String, String)>, sqlx::Error> {
+    fn list_albums_search(&self) -> sqlx::Result<Vec<(u32, String, String)>> {
         let pool: &Pool = self.global();
         crate::RUNTIME.block_on(list_albums_search(&pool.0))
     }
 
-    fn add_playlist_item(&self, playlist_id: i64, track_id: i64) -> Result<i64, sqlx::Error> {
+    fn add_playlist_item(&self, playlist_id: i64, track_id: i64) -> sqlx::Result<i64> {
         let pool: &Pool = self.global();
         crate::RUNTIME.block_on(add_playlist_item(&pool.0, playlist_id, track_id))
     }
 
-    fn create_playlist(&self, name: &str) -> Result<i64, sqlx::Error> {
+    fn create_playlist(&self, name: &str) -> sqlx::Result<i64> {
         let pool: &Pool = self.global();
         crate::RUNTIME.block_on(create_playlist(&pool.0, name))
     }
 
-    fn delete_playlist(&self, playlist_id: i64) -> Result<(), sqlx::Error> {
+    fn delete_playlist(&self, playlist_id: i64) -> sqlx::Result<()> {
         let pool: &Pool = self.global();
         crate::RUNTIME.block_on(delete_playlist(&pool.0, playlist_id))
     }
 
-    fn get_all_playlists(&self) -> Result<Arc<Vec<PlaylistWithCount>>, sqlx::Error> {
+    fn get_all_playlists(&self) -> sqlx::Result<Arc<Vec<PlaylistWithCount>>> {
         let pool: &Pool = self.global();
         crate::RUNTIME.block_on(get_all_playlists(&pool.0))
     }
 
-    fn get_playlist(&self, playlist_id: i64) -> Result<Arc<Playlist>, sqlx::Error> {
+    fn get_playlist(&self, playlist_id: i64) -> sqlx::Result<Arc<Playlist>> {
         let pool: &Pool = self.global();
         crate::RUNTIME.block_on(get_playlist(&pool.0, playlist_id))
     }
 
-    fn get_playlist_track_files(&self, playlist_id: i64) -> Result<Arc<Vec<String>>, sqlx::Error> {
+    fn get_playlist_track_files(&self, playlist_id: i64) -> sqlx::Result<Arc<Vec<String>>> {
         let pool: &Pool = self.global();
         crate::RUNTIME.block_on(get_playlist_track_files(&pool.0, playlist_id))
     }
 
-    fn get_playlist_tracks(
-        &self,
-        playlist_id: i64,
-    ) -> Result<Arc<Vec<(i64, i64, i64)>>, sqlx::Error> {
+    fn get_playlist_tracks(&self, playlist_id: i64) -> sqlx::Result<Arc<Vec<(i64, i64, i64)>>> {
         let pool: &Pool = self.global();
         crate::RUNTIME.block_on(get_playlist_tracks(&pool.0, playlist_id))
     }
 
-    fn move_playlist_item(&self, item_id: i64, new_position: i64) -> Result<(), sqlx::Error> {
+    fn move_playlist_item(&self, item_id: i64, new_position: i64) -> sqlx::Result<()> {
         let pool: &Pool = self.global();
         crate::RUNTIME.block_on(move_playlist_item(&pool.0, item_id, new_position))
     }
 
-    fn remove_playlist_item(&self, item_id: i64) -> Result<(), sqlx::Error> {
+    fn remove_playlist_item(&self, item_id: i64) -> sqlx::Result<()> {
         let pool: &Pool = self.global();
         crate::RUNTIME.block_on(remove_playlist_item(&pool.0, item_id))
     }
 
-    fn get_playlist_item(&self, item_id: i64) -> Result<PlaylistItem, sqlx::Error> {
+    fn get_playlist_item(&self, item_id: i64) -> sqlx::Result<PlaylistItem> {
         let pool: &Pool = self.global();
         crate::RUNTIME.block_on(get_playlist_item(&pool.0, item_id))
     }
 
-    fn get_track_stats(&self) -> Result<Arc<TrackStats>, sqlx::Error> {
+    fn get_track_stats(&self) -> sqlx::Result<Arc<TrackStats>> {
         let pool: &Pool = self.global();
         crate::RUNTIME.block_on(get_track_stats(&pool.0))
     }
 
-    fn playlist_has_track(
-        &self,
-        playlist_id: i64,
-        track_id: i64,
-    ) -> Result<Option<i64>, sqlx::Error> {
+    fn playlist_has_track(&self, playlist_id: i64, track_id: i64) -> sqlx::Result<Option<i64>> {
         let pool: &Pool = self.global();
         crate::RUNTIME.block_on(playlist_has_track(&pool.0, playlist_id, track_id))
     }
