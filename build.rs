@@ -1,6 +1,6 @@
 fn main() {
-    println!("cargo:rerun-if-changed=.env");
     if let Ok(read_vars) = dotenvy::dotenv_iter() {
+        println!("cargo:rerun-if-changed=.env");
         for (key, value) in read_vars.map(Result::unwrap) {
             println!("cargo:rustc-env={key}={value}");
         }
@@ -11,39 +11,59 @@ fn main() {
             break 'sfx v;
         }
 
-        println!("cargo:rerun-if-changed=RELEASE_CHANNEL");
-        let chan = std::fs::read_to_string("RELEASE_CHANNEL");
-        let chan = chan.as_deref().map(str::trim_ascii);
-        if let Ok("stable") = chan {
-            break 'sfx " (release)".to_owned();
-        } // no need for `.git` for stable releases
+        let chan = std::fs::read_to_string("RELEASE_CHANNEL").inspect(|_| {
+            println!("cargo:rerun-if-changed=RELEASE_CHANNEL");
+        });
 
-        println!("cargo:rerun-if-changed=.git/logs/HEAD");
-        let git = std::process::Command::new("git")
-            .arg("--git-dir=.git")
-            .args(["rev-parse", "HEAD"])
-            .output()
-            .expect("failed to run git: is it installed?");
-        if git.status.success()
-            && let output = git.stdout.trim_ascii_end()
-            && output.iter().all(u8::is_ascii_hexdigit)
-            && let Ok(sha) = std::str::from_utf8(output)
-        {
-            let sha = &sha[..7];
-            match chan {
-                Err(_) | Ok("dev") => format!("-dev ({sha})"),
-                // Ok(b"preview") // pre-release?
-                // Ok(b"nightly") // ci build?
-                Ok(chan) => panic!("invalid release channel '{chan}'"),
-            }
-        } else {
-            panic!(
-                "git returned an error: `git rev-parse HEAD` exited with {}\
-                \n== stdout ==\n{}\n== stderr ==\n{}",
-                git.status,
-                String::from_utf8_lossy(&git.stdout),
-                String::from_utf8_lossy(&git.stderr),
-            );
+        let chan = chan.as_deref().map(str::trim_ascii).unwrap_or("dev");
+        if chan == "stable" {
+            break 'sfx " (release)".to_owned();
         }
+
+        // if unstable, include git sha
+        println!("cargo:rerun-if-changed=.git/logs/HEAD");
+        git(&["rev-parse", "HEAD"], |sha| {
+            git(&["status", "--porcelain"], |status| {
+                if status.is_empty() {
+                    let sha = &sha[..7];
+                    match chan {
+                        "dev" => format!("-dev ({sha})"),
+                        // "preview" // pre-release?
+                        // "nightly" // ci build?
+                        chan => panic!("invalid release channel '{chan}'"),
+                    }
+                } else {
+                    "-dev (dirty)".to_owned()
+                }
+            })
+        })
     });
+}
+
+fn git(args: &[&str], f: impl FnOnce(String) -> String) -> String {
+    use std::process::{Command, Output};
+
+    let Ok(cmd @ Output { status, .. }) = Command::new("git")
+        .args(["--git-dir=.git", "--work-tree=."])
+        .args(args)
+        .output()
+    else {
+        println!("cargo::warning=failed to run git: is git installed?");
+        return " (unknown)".to_owned();
+    };
+
+    if status.success() {
+        f(String::from_utf8_lossy(&cmd.stdout)
+            .trim_ascii_end()
+            .to_owned())
+    } else {
+        println!(
+            "cargo::warning=git returned an error: `git {}` exited with {status}\
+            \n--- git stdout\n{}\n--- git stderr\n{}",
+            args.join(" "),
+            String::from_utf8_lossy(&cmd.stdout),
+            String::from_utf8_lossy(&cmd.stderr),
+        );
+        " (unknown)".to_owned()
+    }
 }
