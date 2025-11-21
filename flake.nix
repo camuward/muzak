@@ -89,7 +89,10 @@
         in
           craneDevShell {
             inherit (self') checks;
-            packages = [pkgs.sqlite-interactive];
+            packages = [
+              pkgs.sqlite-interactive
+              pkgs.tokio-console
+            ];
 
             LD_LIBRARY_PATH = lib.optionalString isLinux (
               lib.makeLibraryPath [
