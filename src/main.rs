@@ -17,6 +17,11 @@ mod settings;
 mod ui;
 mod util;
 
+const VERSION_STRING: &str = concat!(
+    env!("CARGO_PKG_VERSION"),
+    env!("HUMMINGBIRD_VERSION_SUFFIX")
+);
+
 static RUNTIME: LazyLock<tokio::runtime::Runtime> = LazyLock::new(|| {
     tokio::runtime::Builder::new_multi_thread()
         .enable_all()
@@ -33,7 +38,7 @@ fn main() -> anyhow::Result<()> {
 
     reg.with(tracing_subscriber::fmt::layer()).init();
 
-    tracing::info!("Starting application");
+    tracing::info!("version {VERSION_STRING}");
 
     crate::ui::app::run()
 }

@@ -52,6 +52,7 @@
               ])
             ];
             cargoExtraArgs = "--features=hummingbird/runtime_shaders";
+            HUMMINGBIRD_VERSION_SUFFIX = "-flake (${builtins.substring 0 7 (inputs.self.rev or "dirty")})";
           }));
         craneArgs = mkArgs (prev: {cargoArtifacts = craneLib.buildDepsOnly prev;});
       in {
