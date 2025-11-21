@@ -125,18 +125,29 @@ impl Decode for App {
     }
 
     fn read_metadata(&self, path: PathBuf, entity: Entity<Option<QueueItemUIData>>) -> Task<()> {
-        self.spawn(async move |cx| match read_metadata(&path).await {
-            Err(err) => error!(
-                ?err,
-                "Failed to read metadata for '{}': {err}",
-                path.display()
-            ),
-            Ok(metadata) => entity
-                .update(cx, |m, cx| {
-                    *m = Some(metadata);
-                    cx.notify();
-                })
-                .expect("Failed to update metadata entity"),
+        let path = Arc::new(path);
+        let path_clone = path.clone();
+
+        self.spawn(async move |cx| {
+            match {
+                crate::RUNTIME
+                    .spawn(async move { read_metadata(&path).await })
+                    .await
+                    .map_err(anyhow::Error::new)
+                    .flatten()
+            } {
+                Err(err) => error!(
+                    ?err,
+                    "Failed to read metadata for '{}': {err}",
+                    path_clone.display()
+                ),
+                Ok(metadata) => entity
+                    .update(cx, |m, cx| {
+                        *m = Some(metadata);
+                        cx.notify();
+                    })
+                    .expect("Failed to update metadata entity"),
+            }
         })
     }
 }
