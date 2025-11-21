@@ -1,6 +1,6 @@
 use std::{
     fs::{self, File},
-    io::{BufReader, Cursor, Write},
+    io::{self, BufReader, BufWriter, Cursor, Read, Write},
     path::{Path, PathBuf},
     time::SystemTime,
 };
@@ -16,7 +16,7 @@ use tokio::sync::mpsc::{
 use tracing::{debug, error, info, warn};
 
 /// The version of the scanning process. If this version number is incremented, a re-scan of all
-/// files will be forced (see [ScanCommand::ForceScan]).
+/// files will be forced (see [`ScanCommand::ForceScan`]).
 const SCAN_VERSION: u16 = 1;
 
 use crate::{
@@ -44,7 +44,7 @@ enum ScanCommand {
     /// A force-scan is different to a regular scan in that it will ignore all previous data and
     /// instead re-scan all tracks and re-create all album information. This is necessary when the
     /// database schema has been changed, or a bug has been fixed with in the scanning proccess,
-    /// and is usually triggered by the scan version changing (see [SCAN_VERSION]).
+    /// and is usually triggered by the scan version changing (see [`SCAN_VERSION`]).
     ForceScan,
     Stop,
 }
@@ -55,10 +55,7 @@ pub struct ScanInterface {
 }
 
 impl ScanInterface {
-    pub(self) fn new(
-        events_rx: Option<UnboundedReceiver<ScanEvent>>,
-        cmd_tx: Sender<ScanCommand>,
-    ) -> Self {
+    fn new(events_rx: Option<UnboundedReceiver<ScanEvent>>, cmd_tx: Sender<ScanCommand>) -> Self {
         ScanInterface { events_rx, cmd_tx }
     }
 
@@ -81,24 +78,18 @@ impl ScanInterface {
     }
 
     pub fn start_broadcast(&mut self, cx: &mut App) {
-        let mut events_rx = None;
-        std::mem::swap(&mut self.events_rx, &mut events_rx);
-
-        let state_model = cx.global::<Models>().scan_state.clone();
-
-        let Some(mut events_rx) = events_rx else {
+        let Some(mut events_rx) = self.events_rx.take() else {
             return;
         };
+        let state_model = cx.global::<Models>().scan_state.clone();
         cx.spawn(async move |cx| {
-            loop {
-                while let Some(event) = events_rx.recv().await {
-                    state_model
-                        .update(cx, |m, cx| {
-                            *m = event;
-                            cx.notify()
-                        })
-                        .expect("failed to update scan state model");
-                }
+            while let Some(event) = events_rx.recv().await {
+                state_model
+                    .update(cx, |m, cx| {
+                        *m = event;
+                        cx.notify()
+                    })
+                    .expect("failed to update scan state model");
             }
         })
         .detach();
@@ -115,6 +106,8 @@ pub enum ScanState {
     Scanning,
 }
 
+type ScanRecord = FxHashMap<PathBuf, u64>;
+
 pub struct ScanThread {
     event_tx: UnboundedSender<ScanEvent>,
     command_rx: Receiver<ScanCommand>,
@@ -125,8 +118,8 @@ pub struct ScanThread {
     to_process: Vec<PathBuf>,
     scan_state: ScanState,
     provider_table: Vec<(&'static [&'static str], Box<dyn MediaProvider>)>,
-    scan_record: FxHashMap<PathBuf, u64>,
-    scan_record_path: Option<PathBuf>,
+    scan_record: ScanRecord,
+    scan_record_path: PathBuf,
     scanned: u64,
     discovered_total: u64,
     /// Whether or not to force a rescan all files. This is set to true when a force-scan is
@@ -200,6 +193,9 @@ impl ScanThread {
         let (cmd_tx, commands_rx) = channel(10);
         let (events_tx, events_rx) = unbounded_channel();
 
+        let scan_record_path = get_dirs().data_dir().join("scan_record");
+        _ = std::fs::remove_file(&scan_record_path.with_extension("json"));
+
         std::thread::Builder::new()
             .name("scanner".to_string())
             .spawn(move || {
@@ -214,7 +210,7 @@ impl ScanThread {
                     provider_table: build_provider_table(),
                     scan_settings: settings,
                     scan_record: FxHashMap::default(),
-                    scan_record_path: None,
+                    scan_record_path,
                     scanned: 0,
                     discovered_total: 0,
                     is_force: false,
@@ -229,33 +225,13 @@ impl ScanThread {
     }
 
     fn run(&mut self) {
-        let dirs = get_dirs();
-        let directory = dirs.data_dir();
-        if !directory.exists() {
-            fs::create_dir(directory).expect("couldn't create data directory");
-        }
-        let file_path = directory.join("scan_record.json");
-
-        if file_path.exists() {
-            let file = File::open(&file_path);
-
-            let Ok(file) = file else {
-                return;
-            };
-            let reader = BufReader::new(file);
-
-            match serde_json::from_reader(reader) {
-                Ok(scan_record) => {
-                    self.scan_record = scan_record;
-                }
-                Err(e) => {
-                    error!("could not read scan record: {:?}", e);
-                    error!("scanning will be slow until the scan record is rebuilt");
-                }
+        match self.read_scan_record() {
+            Ok(saved) => self.scan_record = saved,
+            Err(err) => {
+                error!(?err, "could not read scan record: {err}");
+                error!("scanning will be slow until the scan record is rebuilt");
             }
         }
-
-        self.scan_record_path = Some(file_path);
 
         loop {
             self.read_commands();
@@ -651,57 +627,62 @@ impl ScanThread {
         None
     }
 
-    fn write_scan_record(&self) {
-        if let Some(path) = self.scan_record_path.as_ref() {
-            let mut file = File::create(path).unwrap();
-            let data = serde_json::to_string(&self.scan_record).unwrap();
-            if let Err(err) = file.write_all(data.as_bytes()) {
-                error!("Could not write scan record: {:?}", err);
-                error!("Scan record will not be saved, this may cause rescans on restart");
-            } else {
-                info!("Scan record written to {:?}", path);
-            }
+    fn read_scan_record(&self) -> io::Result<ScanRecord> {
+        let mut record = BufReader::new(File::open(&self.scan_record_path)?);
+        let mut magic = [0; 2];
+        record.read_exact(&mut magic)?;
+        let magic = u16::from_le_bytes(magic);
+        if magic == SCAN_VERSION {
+            Ok(serde_json::from_reader(record)?)
         } else {
-            error!("No scan record path set, scan record will not be saved");
+            Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!("expected scan version {SCAN_VERSION}, got {magic}"),
+            ))
         }
     }
 
+    fn write_scan_record(&self) -> io::Result<()> {
+        let mut file = BufWriter::new(File::create(&self.scan_record_path)?);
+        file.write_all(&SCAN_VERSION.to_le_bytes())?;
+        serde_json::to_writer(&mut file, &self.scan_record)?;
+        info!("Scan record written to {}", self.scan_record_path.display());
+        file.into_inner()?.sync_data()
+    }
+
     fn scan(&mut self) {
-        if self.to_process.is_empty() {
+        let Some(path) = self.to_process.pop() else {
             info!("Scan complete, writing scan record and stopping");
-            self.write_scan_record();
+            self.write_scan_record().unwrap_or_else(|err| {
+                error!(?err, "Could not write scan record: {err}");
+                error!("Scan record will not be saved, this may cause rescans on restart");
+            });
+
             self.scan_state = ScanState::Idle;
             self.event_tx
                 .send(ScanEvent::ScanCompleteIdle)
                 .expect("could not send scan event");
             return;
+        };
+
+        let Some(metadata) = self.read_metadata_for_path(&path) else {
+            warn!("Could not read metadata for {}", path.display());
+            return;
+        };
+
+        if let Err(err) = crate::RUNTIME.block_on(self.update_metadata(metadata, &path)) {
+            error!("Failed to update metadata for {}: {err}", path.display());
         }
 
-        let path = self.to_process.pop().unwrap();
-        let metadata = self.read_metadata_for_path(&path);
+        self.scanned += 1;
 
-        if let Some(metadata) = metadata {
-            let result = crate::RUNTIME.block_on(self.update_metadata(metadata, &path));
-
-            if let Err(err) = result {
-                error!(
-                    "Failed to update metadata for file: {:?}, error: {}",
-                    path, err
-                );
-            }
-
-            self.scanned += 1;
-
-            if self.scanned.is_multiple_of(5) {
-                self.event_tx
-                    .send(ScanEvent::ScanProgress {
-                        current: self.scanned,
-                        total: self.discovered_total,
-                    })
-                    .expect("could not send scan event");
-            }
-        } else {
-            warn!("Could not read metadata for file: {:?}", path);
+        if self.scanned.is_multiple_of(5) {
+            self.event_tx
+                .send(ScanEvent::ScanProgress {
+                    current: self.scanned,
+                    total: self.discovered_total,
+                })
+                .expect("could not send scan event");
         }
     }
 
