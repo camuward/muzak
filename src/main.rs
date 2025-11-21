@@ -6,6 +6,8 @@
 
 use std::sync::LazyLock;
 
+use tracing_subscriber::prelude::*;
+
 mod devices;
 mod library;
 mod media;
@@ -24,7 +26,12 @@ static RUNTIME: LazyLock<tokio::runtime::Runtime> = LazyLock::new(|| {
 });
 
 fn main() -> anyhow::Result<()> {
-    tracing_subscriber::fmt::init();
+    let reg = tracing_subscriber::registry();
+
+    #[cfg(feature = "console")]
+    let reg = reg.with(console_subscriber::spawn());
+
+    reg.with(tracing_subscriber::fmt::layer()).init();
 
     tracing::info!("Starting application");
 
