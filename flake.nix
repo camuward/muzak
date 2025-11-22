@@ -35,7 +35,7 @@
                 (lib.fileset.maybeMissing ./assets)
               ];
             };
-            nativeBuildInputs = [pkgs.pkg-config];
+            nativeBuildInputs = [pkgs.cmake pkgs.pkg-config];
             buildInputs = lib.flatten [
               (lib.optionals isLinux [
                 pkgs.libxkbcommon
