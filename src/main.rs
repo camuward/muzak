@@ -31,13 +31,15 @@ fn main() -> anyhow::Result<()> {
 
     #[cfg(feature = "console")]
     let reg = reg.with(console_subscriber::spawn());
-    reg.with(
+    reg.with({
+        const PREFERRED: &str = "HUMMINGBIRD_LOG";
         tracing_subscriber::fmt::layer().with_filter(
             EnvFilter::builder()
+                .with_env_var(std::env::var_os(PREFERRED).map_or("RUST_LOG", |_| PREFERRED))
                 .with_default_directive(LevelFilter::INFO.into())
                 .from_env_lossy(),
-        ),
-    )
+        )
+    })
     .init();
 
     tracing::info!("Starting application");
