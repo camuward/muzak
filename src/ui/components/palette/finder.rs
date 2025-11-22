@@ -12,7 +12,7 @@ use nucleo::{
 };
 use rustc_hash::FxHashMap;
 use tokio::sync::mpsc::channel;
-use tracing::debug;
+use tracing::{debug, trace};
 
 use crate::ui::{components::input::EnrichedInputAction, theme::Theme};
 
@@ -93,7 +93,7 @@ where
             for item in &items {
                 let item_clone = item.clone();
                 let search_text = (get_item_display)(&item_clone, cx);
-                debug!("Injecting item with search text: '{}'", search_text);
+                trace!("Injecting item with search text: '{search_text}'");
                 injector.push(item_clone, move |_v, dest| {
                     dest[0] = search_text.clone();
                 });

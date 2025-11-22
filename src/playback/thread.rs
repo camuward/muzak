@@ -9,7 +9,7 @@ use std::{
 use itertools::Itertools as _;
 use rand::{rng, seq::SliceRandom};
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender, unbounded_channel};
-use tracing::{debug, error, info, warn};
+use tracing::{debug, error, info, trace, warn};
 
 use crate::{
     devices::builtin::cpal::CpalProvider, media::errors::PlaybackStartError,
@@ -1065,9 +1065,9 @@ impl PlaybackThread {
                 .unwrap()
                 .convert_formats(samples, self.format.as_ref().unwrap());
 
-            debug!("Submitting frame");
+            trace!("Submitting frame");
             let submit_frame = stream.submit_frame(converted.clone());
-            debug!("Finished submitting frame");
+            trace!("Finished submitting frame");
 
             // If we get an error, recreate the stream and retry
             if submit_frame.is_err() {
