@@ -37,7 +37,6 @@
             };
             nativeBuildInputs = [pkgs.pkg-config];
             buildInputs = lib.flatten [
-              pkgs.openssl
               (lib.optionals isLinux [
                 pkgs.libxkbcommon
                 pkgs.xorg.libxcb
