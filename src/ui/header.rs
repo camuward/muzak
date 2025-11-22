@@ -2,6 +2,7 @@ mod lastfm;
 
 use gpui::*;
 use prelude::FluentBuilder;
+use tracing::{info, warn};
 
 use crate::{
     library::scan::ScanEvent,
@@ -19,6 +20,14 @@ pub struct Header {
 impl Header {
     pub fn new(cx: &mut App) -> Entity<Self> {
         let lastfm = LASTFM_CREDS.map(|_| lastfm::LastFM::new(cx));
+
+        if lastfm.is_none() {
+            warn!(
+                "Last.fm authentication disabled. \
+                Set `LASTFM_API_KEY` and `LASTFM_API_SECRET` to allow connecting to Last.fm."
+            );
+            info!("These can additionally be set at compile time to bake them into the binary.");
+        }
 
         cx.new(|cx| Self {
             scan_status: ScanStatus::new(cx),

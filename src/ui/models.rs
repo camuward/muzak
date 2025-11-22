@@ -9,7 +9,7 @@ use gpui::{App, AppContext, Entity, EventEmitter, Global, RenderImage};
 use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
 use tokio::sync::Mutex;
-use tracing::{debug, error, info, warn};
+use tracing::{debug, error, warn};
 
 use crate::{
     library::scan::ScanEvent,
@@ -21,7 +21,7 @@ use crate::{
     },
     services::mmb::{
         MediaMetadataBroadcastService,
-        lastfm::{LastFM, client::LastFMClient, types::Session},
+        lastfm::{LASTFM_CREDS, LastFM, client::LastFMClient, types::Session},
     },
     settings::{SettingsGlobal, storage::StorageData},
     ui::{app::get_dirs, data::Decode, library::ViewSwitchMessage},
@@ -141,7 +141,7 @@ pub fn build_models(cx: &mut App, queue: Queue, storage_data: &StorageData) {
         let directory = dirs.data_dir().to_path_buf();
         let path = directory.join("lastfm.json");
 
-        if let Ok(file) = File::open(path) {
+        if LASTFM_CREDS.is_some() && let Ok(file) = File::open(path) {
             let reader = std::io::BufReader::new(file);
 
             if let Ok(session) = serde_json::from_reader::<std::io::BufReader<File>, Session>(reader) {
@@ -270,17 +270,10 @@ pub fn build_models(cx: &mut App, queue: Queue, storage_data: &StorageData) {
 }
 
 pub fn create_last_fm_mmbs(cx: &mut App, mmbs_list: &Entity<MMBSList>, session: String) {
-    if let Some(mut client) = LastFMClient::from_global() {
-        client.set_session(session);
-        let mmbs = LastFM::new(client);
-        mmbs_list.update(cx, |m, _| {
-            m.0.insert("lastfm".to_string(), Arc::new(Mutex::new(mmbs)));
-        })
-    } else {
-        warn!(
-            "Last.fm authentication disabled. \
-            Set `LASTFM_API_KEY` and `LASTFM_API_SECRET` to allow connecting to Last.fm."
-        );
-        info!("These can additionally be set at compile time to bake them into the binary.");
-    }
+    let mut client = LastFMClient::from_global().expect("creds known to be valid at this point");
+    client.set_session(session);
+    let mmbs = LastFM::new(client);
+    mmbs_list.update(cx, |m, _| {
+        m.0.insert("lastfm".to_string(), Arc::new(Mutex::new(mmbs)));
+    });
 }
