@@ -6,6 +6,7 @@ use std::{
     thread::sleep,
 };
 
+use itertools::Itertools as _;
 use rand::{rng, seq::SliceRandom};
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender, unbounded_channel};
 use tracing::{debug, error, info, warn};
@@ -723,7 +724,7 @@ impl PlaybackThread {
 
     /// Replace the current queue with the given paths.
     fn replace_queue(&mut self, paths: Vec<QueueItemData>) {
-        info!("Replacing queue with: {:?}", paths);
+        debug!("Replacing queue with: '{}'", paths.iter().format(":"));
 
         let mut queue = self.queue.write().expect("couldn't get the queue");
 

@@ -3055,6 +3055,7 @@ dependencies = [
  "imagesize 0.14.0",
  "indexmap",
  "intx",
+ "itertools 0.14.0",
  "md5",
  "moka",
  "mpris-server",
