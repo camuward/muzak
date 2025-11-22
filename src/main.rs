@@ -6,8 +6,7 @@
 
 use std::sync::LazyLock;
 
-use tracing::level_filters::LevelFilter;
-use tracing_subscriber::{EnvFilter, prelude::*};
+use tracing_subscriber::{fmt::format::FmtSpan, prelude::*};
 
 mod devices;
 mod library;
@@ -31,15 +30,22 @@ fn main() -> anyhow::Result<()> {
 
     #[cfg(feature = "console")]
     let reg = reg.with(console_subscriber::spawn());
-    reg.with({
-        const PREFERRED: &str = "HUMMINGBIRD_LOG";
-        tracing_subscriber::fmt::layer().with_filter(
-            EnvFilter::builder()
-                .with_env_var(std::env::var_os(PREFERRED).map_or("RUST_LOG", |_| PREFERRED))
-                .with_default_directive(LevelFilter::INFO.into())
-                .from_env_lossy(),
-        )
-    })
+
+    let env = tracing_subscriber::EnvFilter::builder().parse(
+        ["HUMMINGBIRD_LOG", "RUST_LOG"] // prefer Hummingbird-specific variable
+            .iter() // find the first one that's set at all
+            .find_map(|key| std::env::var(key).ok()) // even if it's empty
+            .filter(|s| !s.is_empty()) // NOW we can check is_empty and use default
+            .unwrap_or_else(|| "info,blade_graphics=warn,symphonia=warn,zbus=warn".to_owned()),
+    )?; // inform user they have a malformed filter
+
+    reg.with(
+        tracing_subscriber::fmt::layer()
+            .with_thread_names(true) // nice to have until we replace with tasks
+            .with_span_events(FmtSpan::FULL) // there's nothing below debug_span
+            .with_timer(tracing_subscriber::fmt::time::uptime()) // date's useless
+            .with_filter(env),
+    )
     .init();
 
     tracing::info!("Starting application");
