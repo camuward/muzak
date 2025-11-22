@@ -78,7 +78,7 @@
           ];
           craneLib = (inputs.crane.mkLib pkgs).overrideToolchain (rust-bin.selectLatestNightlyWith (toolchain:
             toolchain.default.override {
-              extensions = ["rust-analyzer" "rust-src" "clippy" "rustfmt"];
+              extensions = ["rust-analyzer" "rust-src" "clippy" "rustfmt" "rustc-codegen-cranelift-preview"];
             }));
           craneDevShell = craneLib.devShell.override {
             mkShell = pkgs.mkShell.override {
