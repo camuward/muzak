@@ -61,6 +61,7 @@ zed-reqwest = { version = "0.12.15-zed", default-features = false, features = [
 ] }
 
 [build-dependencies]
+anyhow = "1"
 dotenvy = "0.15"
 vergen-git2 = { version = "1" }
 
