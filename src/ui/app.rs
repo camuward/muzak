@@ -22,6 +22,7 @@ use crate::{
     },
     ui::{
         assets::HummingbirdAssetSource,
+        caching::HummingbirdImageCache,
         command_palette::{CommandPalette, CommandPaletteHolder},
         constants::APP_SHADOW_SIZE,
         library,
@@ -53,6 +54,7 @@ struct WindowShadow {
     pub show_queue: Entity<bool>,
     pub show_about: Entity<bool>,
     pub palette: Entity<CommandPalette>,
+    pub image_cache: Entity<HummingbirdImageCache>,
 }
 
 impl Render for WindowShadow {
@@ -69,6 +71,7 @@ impl Render for WindowShadow {
         let show_about = *self.show_about.clone().read(cx);
 
         let mut element = div()
+            .image_cache(self.image_cache.clone())
             .id("window-backdrop")
             .key_context("app")
             .bg(transparent_black())
@@ -452,6 +455,13 @@ pub fn run() -> anyhow::Result<()> {
                             show_queue,
                             show_about,
                             palette,
+                            // use a really small global image cache
+                            // this is literally just to ensure that images are *always* removed
+                            // from memory *at some point*
+                            //
+                            // if your view uses a lot of images you need to have your own image
+                            // cache
+                            image_cache: HummingbirdImageCache::new(20, cx),
                         }
                     })
                 },

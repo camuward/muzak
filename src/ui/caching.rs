@@ -6,7 +6,7 @@ use gpui::{
     ImageCacheItem, ImageCacheProvider, ImageSource, Resource, hash,
 };
 use rustc_hash::{FxBuildHasher, FxHashMap};
-use tracing::{debug, error};
+use tracing::{debug, error, info};
 
 pub fn hummingbird_cache(
     id: impl Into<ElementId>,
@@ -47,9 +47,11 @@ pub struct HummingbirdImageCache {
 impl HummingbirdImageCache {
     pub fn new(max_items: usize, cx: &mut App) -> Entity<Self> {
         cx.new(|cx| {
+            info!("Creating HummingbirdImageCache");
             cx.on_release(|this: &mut Self, cx| {
-                for (_, (mut image, resource)) in take(&mut this.cache) {
+                for (idx, (mut image, resource)) in take(&mut this.cache) {
                     if let Some(Ok(image)) = image.get() {
+                        info!("Dropping image {idx}");
                         cx.drop_image(image, None);
                     }
 
