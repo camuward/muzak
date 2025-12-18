@@ -18,6 +18,7 @@ use crate::{
         components::{
             button::{ButtonIntent, ButtonSize, button},
             icons::{CIRCLE_PLUS, PAUSE, PLAY, SHUFFLE, icon},
+            scrollbar::floating_scrollbar,
         },
         global_actions::PlayPause,
         library::track_listing::{ArtistNameVisibility, TrackListing},
@@ -33,6 +34,7 @@ pub struct ReleaseView {
     track_listing: TrackListing,
     release_info: Option<SharedString>,
     img_path: SharedString,
+    scroll_handle: ScrollHandle,
 }
 
 impl ReleaseView {
@@ -88,6 +90,7 @@ impl ReleaseView {
                 track_listing,
                 release_info,
                 img_path: SharedString::from(format!("!db://album/{album_id}/full")),
+                scroll_handle: ScrollHandle::new(),
             }
         })
     }
@@ -111,233 +114,254 @@ impl Render for ReleaseView {
                     .any(|track| current_track == track.location)
             });
 
+        let scroll_handle = self.scroll_handle.clone();
+
         div()
             .image_cache(hummingbird_cache(("release", self.album.id as u64), 1))
-            .id("release-view")
-            .overflow_y_scroll()
-            .pt(px(10.0))
+            .flex()
             .w_full()
-            .flex_shrink()
-            .overflow_x_hidden()
+            .max_h_full()
+            .relative()
+            .overflow_hidden()
+            .mt(px(10.0))
             .max_w(px(1000.0))
             .child(
                 div()
-                    .flex_shrink()
-                    .flex()
-                    .overflow_x_hidden()
-                    .px(px(18.0))
+                    .id("release-view")
+                    .overflow_y_scroll()
+                    .track_scroll(&scroll_handle)
                     .w_full()
+                    .flex_shrink()
+                    .overflow_x_hidden()
                     .child(
                         div()
-                            .rounded(px(4.0))
-                            .bg(theme.album_art_background)
-                            .shadow_sm()
-                            .w(px(160.0))
-                            .h(px(160.0))
-                            .flex_shrink_0()
-                            .overflow_hidden()
-                            .child(
-                                img(self.img_path.clone())
-                                    .min_w(px(160.0))
-                                    .min_h(px(160.0))
-                                    .max_w(px(160.0))
-                                    .max_h(px(160.0))
-                                    .overflow_hidden()
-                                    .flex()
-                                    // TODO: Ideally this should be ObjectFit::Cover, but this
-                                    // breaks rounding
-                                    // FIXME: This is a GPUI bug
-                                    .object_fit(ObjectFit::Fill)
-                                    .rounded(px(4.0)),
-                            ),
-                    )
-                    .child(
-                        div()
-                            .ml(px(18.0))
-                            .mt_auto()
                             .flex_shrink()
                             .flex()
-                            .flex_col()
-                            .w_full()
                             .overflow_x_hidden()
-                            .child(div().when_some(
-                                self.artist.as_ref().map(|v| v.name.clone()),
-                                |this, artist| this.child(artist.unwrap()),
-                            ))
+                            .px(px(18.0))
+                            .w_full()
                             .child(
                                 div()
-                                    .font_weight(FontWeight::EXTRA_BOLD)
-                                    .text_size(rems(2.5))
-                                    .line_height(rems(2.75))
-                                    .overflow_x_hidden()
-                                    .pb(px(10.0))
-                                    .w_full()
-                                    .text_ellipsis()
-                                    .child(self.album.title.clone()),
+                                    .rounded(px(4.0))
+                                    .bg(theme.album_art_background)
+                                    .shadow_sm()
+                                    .w(px(160.0))
+                                    .h(px(160.0))
+                                    .flex_shrink_0()
+                                    .overflow_hidden()
+                                    .child(
+                                        img(self.img_path.clone())
+                                            .min_w(px(160.0))
+                                            .min_h(px(160.0))
+                                            .max_w(px(160.0))
+                                            .max_h(px(160.0))
+                                            .overflow_hidden()
+                                            .flex()
+                                            // TODO: Ideally this should be ObjectFit::Cover, but this
+                                            // breaks rounding
+                                            // FIXME: This is a GPUI bug
+                                            .object_fit(ObjectFit::Fill)
+                                            .rounded(px(4.0)),
+                                    ),
                             )
                             .child(
                                 div()
-                                    .gap(px(10.0))
+                                    .ml(px(18.0))
+                                    .mt_auto()
+                                    .flex_shrink()
                                     .flex()
-                                    .flex_row()
+                                    .flex_col()
+                                    .w_full()
+                                    .overflow_x_hidden()
+                                    .child(div().when_some(
+                                        self.artist.as_ref().map(|v| v.name.clone()),
+                                        |this, artist| this.child(artist.unwrap()),
+                                    ))
                                     .child(
-                                        button()
-                                            .id("release-play-button")
-                                            .size(ButtonSize::Large)
-                                            .font_weight(FontWeight::SEMIBOLD)
-                                            .intent(ButtonIntent::Primary)
-                                            .when(!current_track_in_album, |this| {
-                                                this.on_click(cx.listener(
-                                                    |this: &mut ReleaseView, _, _, cx| {
-                                                        let queue_items = this
-                                                            .track_listing
-                                                            .tracks()
-                                                            .iter()
-                                                            .map(|track| {
-                                                                QueueItemData::new(
-                                                                    cx,
-                                                                    track.location.clone(),
-                                                                    Some(track.id),
-                                                                    track.album_id,
-                                                                )
-                                                            })
-                                                            .collect();
-
-                                                        replace_queue(queue_items, cx)
-                                                    },
-                                                ))
-                                            })
-                                            .when(current_track_in_album, |button| {
-                                                button.on_click(|_, window, cx| {
-                                                    window.dispatch_action(Box::new(PlayPause), cx);
-                                                })
-                                            })
+                                        div()
+                                            .font_weight(FontWeight::EXTRA_BOLD)
+                                            .text_size(rems(2.5))
+                                            .line_height(rems(2.75))
+                                            .overflow_x_hidden()
+                                            .pb(px(10.0))
+                                            .w_full()
+                                            .text_ellipsis()
+                                            .child(self.album.title.clone()),
+                                    )
+                                    .child(
+                                        div()
+                                            .gap(px(10.0))
+                                            .flex()
+                                            .flex_row()
                                             .child(
-                                                icon(if current_track_in_album && is_playing {
-                                                    PAUSE
-                                                } else {
-                                                    PLAY
-                                                })
-                                                .size(px(16.0))
-                                                .my_auto(),
+                                                button()
+                                                    .id("release-play-button")
+                                                    .size(ButtonSize::Large)
+                                                    .font_weight(FontWeight::SEMIBOLD)
+                                                    .intent(ButtonIntent::Primary)
+                                                    .when(!current_track_in_album, |this| {
+                                                        this.on_click(cx.listener(
+                                                            |this: &mut ReleaseView, _, _, cx| {
+                                                                let queue_items = this
+                                                                    .track_listing
+                                                                    .tracks()
+                                                                    .iter()
+                                                                    .map(|track| {
+                                                                        QueueItemData::new(
+                                                                            cx,
+                                                                            track.location.clone(),
+                                                                            Some(track.id),
+                                                                            track.album_id,
+                                                                        )
+                                                                    })
+                                                                    .collect();
+
+                                                                replace_queue(queue_items, cx)
+                                                            },
+                                                        ))
+                                                    })
+                                                    .when(current_track_in_album, |button| {
+                                                        button.on_click(|_, window, cx| {
+                                                            window.dispatch_action(
+                                                                Box::new(PlayPause),
+                                                                cx,
+                                                            );
+                                                        })
+                                                    })
+                                                    .child(
+                                                        icon(
+                                                            if current_track_in_album && is_playing
+                                                            {
+                                                                PAUSE
+                                                            } else {
+                                                                PLAY
+                                                            },
+                                                        )
+                                                        .size(px(16.0))
+                                                        .my_auto(),
+                                                    )
+                                                    .child(div().child(
+                                                        if current_track_in_album && is_playing {
+                                                            "Pause"
+                                                        } else {
+                                                            "Play"
+                                                        },
+                                                    )),
                                             )
-                                            .child(div().child(
-                                                if current_track_in_album && is_playing {
-                                                    "Pause"
-                                                } else {
-                                                    "Play"
-                                                },
-                                            )),
-                                    )
-                                    .child(
-                                        button()
-                                            .id("release-add-button")
-                                            .size(ButtonSize::Large)
-                                            .flex_none()
-                                            .on_click(cx.listener(
-                                                |this: &mut ReleaseView, _, _, cx| {
-                                                    let queue_items = this
-                                                        .track_listing
-                                                        .tracks()
-                                                        .iter()
-                                                        .map(|track| {
-                                                            QueueItemData::new(
-                                                                cx,
-                                                                track.location.clone(),
-                                                                Some(track.id),
-                                                                track.album_id,
-                                                            )
-                                                        })
-                                                        .collect();
+                                            .child(
+                                                button()
+                                                    .id("release-add-button")
+                                                    .size(ButtonSize::Large)
+                                                    .flex_none()
+                                                    .on_click(cx.listener(
+                                                        |this: &mut ReleaseView, _, _, cx| {
+                                                            let queue_items = this
+                                                                .track_listing
+                                                                .tracks()
+                                                                .iter()
+                                                                .map(|track| {
+                                                                    QueueItemData::new(
+                                                                        cx,
+                                                                        track.location.clone(),
+                                                                        Some(track.id),
+                                                                        track.album_id,
+                                                                    )
+                                                                })
+                                                                .collect();
 
-                                                    cx.global::<PlaybackInterface>()
-                                                        .queue_list(queue_items);
-                                                },
-                                            ))
-                                            .child(icon(CIRCLE_PLUS).size(px(16.0)).my_auto()),
-                                    )
-                                    .child(
-                                        button()
-                                            .id("release-shuffle-button")
-                                            .size(ButtonSize::Large)
-                                            .flex_none()
-                                            .on_click(cx.listener(
-                                                |this: &mut ReleaseView, _, _, cx| {
-                                                    let queue_items = this
-                                                        .track_listing
-                                                        .tracks()
-                                                        .iter()
-                                                        .map(|track| {
-                                                            QueueItemData::new(
-                                                                cx,
-                                                                track.location.clone(),
-                                                                Some(track.id),
-                                                                track.album_id,
-                                                            )
-                                                        })
-                                                        .collect();
+                                                            cx.global::<PlaybackInterface>()
+                                                                .queue_list(queue_items);
+                                                        },
+                                                    ))
+                                                    .child(
+                                                        icon(CIRCLE_PLUS).size(px(16.0)).my_auto(),
+                                                    ),
+                                            )
+                                            .child(
+                                                button()
+                                                    .id("release-shuffle-button")
+                                                    .size(ButtonSize::Large)
+                                                    .flex_none()
+                                                    .on_click(cx.listener(
+                                                        |this: &mut ReleaseView, _, _, cx| {
+                                                            let queue_items = this
+                                                                .track_listing
+                                                                .tracks()
+                                                                .iter()
+                                                                .map(|track| {
+                                                                    QueueItemData::new(
+                                                                        cx,
+                                                                        track.location.clone(),
+                                                                        Some(track.id),
+                                                                        track.album_id,
+                                                                    )
+                                                                })
+                                                                .collect();
 
-                                                    if !(*cx
-                                                        .global::<PlaybackInfo>()
-                                                        .shuffling
-                                                        .read(cx))
-                                                    {
-                                                        cx.global::<PlaybackInterface>()
-                                                            .toggle_shuffle();
-                                                    }
+                                                            if !(*cx
+                                                                .global::<PlaybackInfo>()
+                                                                .shuffling
+                                                                .read(cx))
+                                                            {
+                                                                cx.global::<PlaybackInterface>()
+                                                                    .toggle_shuffle();
+                                                            }
 
-                                                    replace_queue(queue_items, cx)
-                                                },
-                                            ))
-                                            .child(icon(SHUFFLE).size(px(16.0)).my_auto()),
+                                                            replace_queue(queue_items, cx)
+                                                        },
+                                                    ))
+                                                    .child(icon(SHUFFLE).size(px(16.0)).my_auto()),
+                                            ),
                                     ),
                             ),
-                    ),
-            )
-            .child({
-                let render_fn = self.track_listing.make_render_fn();
-                let what = self.track_listing.track_list_state().clone();
+                    )
+                    .child({
+                        let render_fn = self.track_listing.make_render_fn();
+                        let what = self.track_listing.track_list_state().clone();
 
-                list(what, render_fn)
-                    .w_full()
-                    .flex()
-                    .flex_col()
-                    .mx_auto()
-                    .max_h_full()
-                    .with_sizing_behavior(ListSizingBehavior::Infer)
-            })
-            .when(
-                self.release_info.is_some()
-                    || self.album.release_date.is_some()
-                    || self.album.release_year.is_some()
-                    || self.album.isrc.is_some(),
-                |this| {
-                    this.child(
-                        div()
+                        list(what, render_fn)
+                            .w_full()
                             .flex()
                             .flex_col()
-                            .text_sm()
-                            .ml(px(18.0))
-                            .pt(px(12.0))
-                            .pb(px(24.0))
-                            .font_weight(FontWeight::SEMIBOLD)
-                            .text_color(theme.text_secondary)
-                            .when_some(self.release_info.clone(), |this, release_info| {
-                                this.child(div().child(release_info))
-                            })
-                            .when_some(self.album.release_date, |this, date| {
-                                this.child(
-                                    div().child(format!("Released {}", date.format("%B %-e, %Y"))),
-                                )
-                            })
-                            .when_some(self.album.release_year, |this, year| {
-                                this.child(div().child(format!("Released {year}")))
-                            })
-                            .when_some(self.album.isrc.as_ref(), |this, isrc| {
-                                this.child(div().child(isrc.clone()))
-                            }),
-                    )
-                },
+                            .mx_auto()
+                            .max_h_full()
+                            .with_sizing_behavior(ListSizingBehavior::Infer)
+                    })
+                    .when(
+                        self.release_info.is_some()
+                            || self.album.release_date.is_some()
+                            || self.album.release_year.is_some()
+                            || self.album.isrc.is_some(),
+                        |this| {
+                            this.child(
+                                div()
+                                    .flex()
+                                    .flex_col()
+                                    .text_sm()
+                                    .ml(px(18.0))
+                                    .pt(px(12.0))
+                                    .pb(px(12.0))
+                                    .font_weight(FontWeight::SEMIBOLD)
+                                    .text_color(theme.text_secondary)
+                                    .when_some(self.release_info.clone(), |this, release_info| {
+                                        this.child(div().child(release_info))
+                                    })
+                                    .when_some(self.album.release_date, |this, date| {
+                                        this.child(div().child(format!(
+                                            "Released {}",
+                                            date.format("%B %-e, %Y")
+                                        )))
+                                    })
+                                    .when_some(self.album.release_year, |this, year| {
+                                        this.child(div().child(format!("Released {year}")))
+                                    })
+                                    .when_some(self.album.isrc.as_ref(), |this, isrc| {
+                                        this.child(div().child(isrc.clone()))
+                                    }),
+                            )
+                        },
+                    ),
             )
+            .child(floating_scrollbar("release_scrollbar", scroll_handle))
     }
 }

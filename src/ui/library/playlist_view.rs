@@ -2,7 +2,8 @@ use std::sync::Arc;
 
 use gpui::{
     App, AppContext, Context, Entity, FocusHandle, FontWeight, InteractiveElement, KeyBinding,
-    ParentElement, Render, Styled, Window, actions, div, px, rems, uniform_list,
+    ParentElement, Render, Styled, UniformListScrollHandle, Window, actions, div, px, rems,
+    uniform_list,
 };
 use rustc_hash::FxHashMap;
 use tracing::{error, info};
@@ -23,6 +24,7 @@ use crate::{
         components::{
             button::{ButtonIntent, ButtonSize, button},
             icons::{CIRCLE_PLUS, PLAY, PLAYLIST, SHUFFLE, STAR, icon},
+            scrollbar::floating_scrollbar,
         },
         library::track_listing::{
             ArtistNameVisibility,
@@ -49,6 +51,7 @@ pub struct PlaylistView {
     render_counter: Entity<usize>,
     focus_handle: FocusHandle,
     first_render: bool,
+    scroll_handle: UniformListScrollHandle,
 }
 
 impl PlaylistView {
@@ -95,6 +98,7 @@ impl PlaylistView {
                 render_counter: cx.new(|_| 0),
                 focus_handle,
                 first_render: true,
+                scroll_handle: UniformListScrollHandle::new(),
             }
         })
     }
@@ -107,6 +111,7 @@ impl Render for PlaylistView {
         let render_counter = self.render_counter.clone();
         let pl_id = self.playlist.id;
         let playlist_name = self.playlist.name.0.clone();
+        let scroll_handle = self.scroll_handle.clone();
 
         let theme = cx.global::<Theme>();
 
@@ -287,51 +292,60 @@ impl Render for PlaylistView {
                     ),
             )
             .child(
-                uniform_list("playlist-list", items_clone.len(), move |range, _, cx| {
-                    let start = range.start;
-                    let is_templ_render = range.start == 0 && range.end == 1;
+                div()
+                    .flex()
+                    .w_full()
+                    .h_full()
+                    .relative()
+                    .mt(px(18.0))
+                    .child(
+                        uniform_list("playlist-list", items_clone.len(), move |range, _, cx| {
+                            let start = range.start;
+                            let is_templ_render = range.start == 0 && range.end == 1;
 
-                    let items = &items_clone[range];
+                            let items = &items_clone[range];
 
-                    items
-                        .iter()
-                        .enumerate()
-                        .map(|(idx, item)| {
-                            let idx = idx + start;
+                            items
+                                .iter()
+                                .enumerate()
+                                .map(|(idx, item)| {
+                                    let idx = idx + start;
 
-                            if !is_templ_render {
-                                prune_views(&views_model, &render_counter, idx, cx);
-                            }
+                                    if !is_templ_render {
+                                        prune_views(&views_model, &render_counter, idx, cx);
+                                    }
 
-                            div().child(create_or_retrieve_view(
-                                &views_model,
-                                idx,
-                                move |cx| {
-                                    let track = cx.get_track_by_id(item.1).unwrap();
-                                    TrackItem::new(
+                                    div().child(create_or_retrieve_view(
+                                        &views_model,
+                                        idx,
+                                        move |cx| {
+                                            let track = cx.get_track_by_id(item.1).unwrap();
+                                            TrackItem::new(
+                                                cx,
+                                                Arc::try_unwrap(track).unwrap(),
+                                                false,
+                                                ArtistNameVisibility::Always,
+                                                TrackItemLeftField::Art,
+                                                Some(TrackPlaylistInfo {
+                                                    id: pl_id,
+                                                    item_id: item.0,
+                                                }),
+                                            )
+                                        },
                                         cx,
-                                        Arc::try_unwrap(track).unwrap(),
-                                        false,
-                                        ArtistNameVisibility::Always,
-                                        TrackItemLeftField::Art,
-                                        Some(TrackPlaylistInfo {
-                                            id: pl_id,
-                                            item_id: item.0,
-                                        }),
-                                    )
-                                },
-                                cx,
-                            ))
+                                    ))
+                                })
+                                .collect()
                         })
-                        .collect()
-                })
-                .w_full()
-                .h_full()
-                .flex()
-                .flex_col()
-                .border_color(theme.border_color)
-                .border_t_1()
-                .mt(px(18.0)),
+                        .w_full()
+                        .h_full()
+                        .flex()
+                        .flex_col()
+                        .border_color(theme.border_color)
+                        .border_t_1()
+                        .track_scroll(scroll_handle.clone()),
+                    )
+                    .child(floating_scrollbar("playlist", scroll_handle)),
             )
     }
 }

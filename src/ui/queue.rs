@@ -6,6 +6,7 @@ use crate::{
     ui::components::{
         icons::{CROSS, SHUFFLE, TRASH, icon},
         nav_button::nav_button,
+        scrollbar::floating_scrollbar,
     },
 };
 use gpui::*;
@@ -161,6 +162,7 @@ pub struct Queue {
     render_counter: Entity<usize>,
     shuffling: Entity<bool>,
     show_queue: Entity<bool>,
+    scroll_handle: UniformListScrollHandle,
 }
 
 impl Queue {
@@ -190,6 +192,7 @@ impl Queue {
                 render_counter,
                 shuffling,
                 show_queue,
+                scroll_handle: UniformListScrollHandle::new(),
             }
         })
     }
@@ -209,6 +212,7 @@ impl Render for Queue {
         let shuffling = self.shuffling.read(cx);
         let views_model = self.views_model.clone();
         let render_counter = self.render_counter.clone();
+        let scroll_handle = self.scroll_handle.clone();
 
         div()
             // .absolute()
@@ -285,50 +289,59 @@ impl Render for Queue {
                     ),
             )
             .child(
-                uniform_list("queue", queue.len(), move |range, _, cx| {
-                    let start = range.start;
-                    let is_templ_render = range.start == 0 && range.end == 1;
+                div()
+                    .flex()
+                    .w_full()
+                    .h_full()
+                    .relative()
+                    .child(
+                        uniform_list("queue", queue.len(), move |range, _, cx| {
+                            let start = range.start;
+                            let is_templ_render = range.start == 0 && range.end == 1;
 
-                    let queue = cx
-                        .global::<Models>()
-                        .queue
-                        .clone()
-                        .read(cx)
-                        .data
-                        .read()
-                        .expect("could not read queue");
+                            let queue = cx
+                                .global::<Models>()
+                                .queue
+                                .clone()
+                                .read(cx)
+                                .data
+                                .read()
+                                .expect("could not read queue");
 
-                    if range.end <= queue.len() {
-                        let items = queue[range].to_vec();
+                            if range.end <= queue.len() {
+                                let items = queue[range].to_vec();
 
-                        drop(queue);
+                                drop(queue);
 
-                        items
-                            .into_iter()
-                            .enumerate()
-                            .map(|(idx, item)| {
-                                let idx = idx + start;
+                                items
+                                    .into_iter()
+                                    .enumerate()
+                                    .map(|(idx, item)| {
+                                        let idx = idx + start;
 
-                                if !is_templ_render {
-                                    prune_views(&views_model, &render_counter, idx, cx);
-                                }
+                                        if !is_templ_render {
+                                            prune_views(&views_model, &render_counter, idx, cx);
+                                        }
 
-                                div().child(create_or_retrieve_view(
-                                    &views_model,
-                                    idx,
-                                    move |cx| QueueItem::new(cx, Some(item), idx),
-                                    cx,
-                                ))
-                            })
-                            .collect()
-                    } else {
-                        Vec::new()
-                    }
-                })
-                .w_full()
-                .h_full()
-                .flex()
-                .flex_col(),
+                                        div().child(create_or_retrieve_view(
+                                            &views_model,
+                                            idx,
+                                            move |cx| QueueItem::new(cx, Some(item), idx),
+                                            cx,
+                                        ))
+                                    })
+                                    .collect()
+                            } else {
+                                Vec::new()
+                            }
+                        })
+                        .w_full()
+                        .h_full()
+                        .flex()
+                        .flex_col()
+                        .track_scroll(scroll_handle.clone()),
+                    )
+                    .child(floating_scrollbar("queue_scrollbar", scroll_handle)),
             )
     }
 }
