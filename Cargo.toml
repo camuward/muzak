@@ -30,7 +30,7 @@ indexmap = { version = "2", features = ["serde"] }
 intx = "0.1"
 itertools = "0.14"
 md5 = "0.8"
-moka = { version = "0.12", features = ["future"] }
+moka = { version = "0.12", features = ["sync"] }
 notify = "8"
 nucleo = "0.5"
 open = "5"
