@@ -10,10 +10,11 @@ use std::path::{Path, PathBuf};
 use async_trait::async_trait;
 use futures::StreamExt;
 use gpui::{App, Global, Window};
+use itertools::Itertools as _;
 use raw_window_handle::{HasWindowHandle, RawWindowHandle};
 use rustc_hash::FxHashMap;
 use tokio::sync::mpsc::UnboundedSender;
-use tracing::{error, warn};
+use tracing::{Instrument as _, debug_span, error, trace_span, warn};
 
 use crate::{
     media::metadata::Metadata,
@@ -25,14 +26,13 @@ use crate::{
     ui::models::{ImageEvent, Models, PlaybackInfo},
 };
 
-/// The InitPlaybackController trait allows you to initialize a new PlaybackController. All
-/// PlaybackControllers must implement this trait.
+/// Initialize a new [`PlaybackController`]. All playback controllers must implement this trait.
 ///
-/// A ControllerBridge is provided to allow external controllers to send playback events to the
-/// playback thread, and a RawWindowHandle is provided to allow the controller to attach to the
+/// A [`ControllerBridge`] is provided to allow external controllers to send playback events to the
+/// playback thread, and a [`RawWindowHandle`] is provided to allow the controller to attach to the
 /// window if necessary.
 pub trait InitPlaybackController {
-    /// Create a new PlaybackController.
+    /// Creates the [`PlaybackController`].
     fn init(
         bridge: ControllerBridge,
         handle: Option<RawWindowHandle>,
@@ -40,24 +40,23 @@ pub trait InitPlaybackController {
 }
 
 #[async_trait]
-/// The PlaybackController trait allows you to connect external controllers (like the system's
-/// media controls) to Hummingbird.
+/// Connects external controllers (like the system's media controls) to Hummingbird.
 ///
-/// When a new file is opened, events are emitted in this order:
-/// new_file -> duration_changed -> metadata_changed -> album_art_changed, with metadata_changed
-/// and album_art_changed occuring only if the track being played has metadata and album art,
-/// respectively. Not all tracks will have metadata: you should still display the file name for
-/// a track and allow controlling of playback.
+/// When a new file is opened, events are emitted in this order: `new_file -> duration_changed
+/// -> metadata_changed -> album_art_changed`, with `metadata_changed` and `album_art_changed`
+/// occurring only if the track being played has metadata and album art, respectively. Not all
+/// tracks will have metadata: you should still display the file name for a track and allow
+/// controlling of playback.
 ///
-/// PlaybackControllers are created via the InitPlaybackController trait, which is seperate to
-/// allow PlaybackController to be object-safe.
+/// Controllers are created via the [`InitPlaybackController`] trait, which is separate in order
+/// to allow `PlaybackController` to be object-safe.
 ///
-/// Multiple PlaybackControllers can be attached at once; they will all be sent the same events and
-/// the same data. Not all PlaybackControllers must handle all events - if you wish not to handle
-/// a given event, simply implement the function by returning Ok(()).
+/// Multiple controllers can be attached at once; they will all be sent the same events and the
+/// same data. Not all `PlaybackController`s must handle all events - if you wish not to handle
+/// a given event, simply implement the function by returning `Ok(())`.
 ///
-/// All implementations of this trait should be proceeded by `#[async_trait]`, from the async-trait
-/// library.
+/// All implementations of this trait should be preceeded by `#[async_trait]`, from the
+/// [`async_trait`] crate.
 pub trait PlaybackController: Send {
     /// Indicates that the position in the current file has changed.
     async fn position_changed(&mut self, new_position: u64) -> anyhow::Result<()>;
@@ -80,8 +79,8 @@ pub trait PlaybackController: Send {
     /// Indicates that the repeat state has changed.
     async fn repeat_state_changed(&mut self, repeat_state: RepeatState) -> anyhow::Result<()>;
 
-    /// Indicates that the playback state has changed. When the PlaybackState is Stopped, no file
-    /// is queued for playback.
+    /// Indicates that the playback state has changed. When the provided state is
+    /// [`PlaybackState::Stopped`], no file is queued for playback.
     async fn playback_state_changed(&mut self, playback_state: PlaybackState)
     -> anyhow::Result<()>;
 
@@ -98,7 +97,6 @@ pub struct ControllerBridge {
     playback_thread: UnboundedSender<PlaybackCommand>,
 }
 
-#[allow(dead_code)]
 impl ControllerBridge {
     pub fn new(playback_thread: UnboundedSender<PlaybackCommand>) -> Self {
         Self { playback_thread }
@@ -166,14 +164,14 @@ impl ControllerBridge {
 type ControllerList = FxHashMap<String, Box<dyn PlaybackController>>;
 
 // has to be held in memory
-#[allow(dead_code)]
 pub struct PbcHandle(UnboundedSender<PbcEvent>, tokio::task::JoinHandle<()>);
 
 impl Global for PbcHandle {}
 
+#[derive(derive_more::Debug)]
 enum PbcEvent {
-    MetadataChanged(Box<Metadata>),
-    AlbumArtChanged(Box<[u8]>),
+    MetadataChanged(#[debug(skip)] Box<Metadata>),
+    AlbumArtChanged(#[debug(skip)] Box<[u8]>),
     PositionChanged(u64),
     DurationChanged(u64),
     NewFile(PathBuf),
@@ -208,7 +206,7 @@ pub fn register_pbc_event_handlers(cx: &mut App) {
         let meta = e.read(cx).clone();
         let PbcHandle(tx, _) = cx.global();
         if let Err(err) = tx.send(PbcEvent::MetadataChanged(Box::new(meta))) {
-            error!("playback controller channel closed: {err}");
+            error!(msg = ?err.0, "failed to send pbc event: {err}");
         }
     })
     .detach();
@@ -217,7 +215,7 @@ pub fn register_pbc_event_handlers(cx: &mut App) {
         let PbcHandle(tx, _) = cx.global();
         // FIXME: this is really way too expensive
         if let Err(err) = tx.send(PbcEvent::AlbumArtChanged(img.clone())) {
-            error!("playback controller channel closed: {err}");
+            error!(msg = ?err.0, "failed to send pbc event: {err}");
         }
     })
     .detach();
@@ -235,7 +233,7 @@ pub fn register_pbc_event_handlers(cx: &mut App) {
         let &pos = e.read(cx);
         let PbcHandle(tx, _) = cx.global();
         if let Err(err) = tx.send(PbcEvent::PositionChanged(pos)) {
-            error!("playback controller channel closed: {err}");
+            error!(msg = ?err.0, "failed to send pbc event: {err}");
         }
     })
     .detach();
@@ -244,7 +242,7 @@ pub fn register_pbc_event_handlers(cx: &mut App) {
         let &dur = e.read(cx);
         let PbcHandle(tx, _) = cx.global();
         if let Err(err) = tx.send(PbcEvent::DurationChanged(dur)) {
-            error!("playback controller channel closed: {err}");
+            error!(msg = ?err.0, "failed to send pbc event: {err}");
         }
     })
     .detach();
@@ -255,7 +253,7 @@ pub fn register_pbc_event_handlers(cx: &mut App) {
             && let PbcHandle(tx, _) = cx.global()
             && let Err(err) = tx.send(PbcEvent::NewFile(path))
         {
-            error!("playback controller channel closed: {err}");
+            error!(msg = ?err.0, "failed to send pbc event: {err}");
         }
     })
     .detach();
@@ -264,7 +262,7 @@ pub fn register_pbc_event_handlers(cx: &mut App) {
         let &vol = e.read(cx);
         let PbcHandle(tx, _) = cx.global();
         if let Err(err) = tx.send(PbcEvent::VolumeChanged(vol)) {
-            error!("playback controller channel closed: {err}");
+            error!(msg = ?err.0, "failed to send pbc event: {err}");
         }
     })
     .detach();
@@ -273,7 +271,7 @@ pub fn register_pbc_event_handlers(cx: &mut App) {
         let &repeat = e.read(cx);
         let PbcHandle(tx, _) = cx.global();
         if let Err(err) = tx.send(PbcEvent::RepeatStateChanged(repeat)) {
-            error!("playback controller channel closed: {err}");
+            error!(msg = ?err.0, "failed to send pbc event: {err}");
         }
     })
     .detach();
@@ -282,7 +280,7 @@ pub fn register_pbc_event_handlers(cx: &mut App) {
         let &state = e.read(cx);
         let PbcHandle(tx, _) = cx.global();
         if let Err(err) = tx.send(PbcEvent::PlaybackStateChanged(state)) {
-            error!("playback controller channel closed: {err}");
+            error!(msg = ?err.0, "failed to send pbc event: {err}");
         }
     })
     .detach();
@@ -291,13 +289,13 @@ pub fn register_pbc_event_handlers(cx: &mut App) {
         let &shuffle = e.read(cx);
         let PbcHandle(tx, _) = cx.global();
         if let Err(err) = tx.send(PbcEvent::ShuffleStateChanged(shuffle)) {
-            error!("playback controller channel closed: {err}");
+            error!(msg = ?err.0, "failed to send pbc event: {err}");
         }
     })
     .detach();
 }
 
-pub fn init_pbc_task(cx: &mut App, window: &mut Window) {
+pub fn init_pbc_task(cx: &mut App, window: &Window) {
     let mut list = ControllerList::default();
 
     let sender = cx.global::<PlaybackInterface>().get_sender();
@@ -344,12 +342,17 @@ pub fn init_pbc_task(cx: &mut App, window: &mut Window) {
 
     let (pbc_tx, mut pbc_rx) = tokio::sync::mpsc::unbounded_channel::<PbcEvent>();
     let task = crate::RUNTIME.spawn(async move {
-        tracing::debug_span!("playback_controller_task");
+        let span = debug_span!("pbc_task", pbcs = %list.keys().format(","));
 
         while let Some(event) = pbc_rx.recv().await {
+            let span = trace_span!(parent: &span, "handle_all", ?event);
             futures::stream::iter(&mut list)
                 .for_each_concurrent(None, async |(name, pbc)| {
-                    if let Err(err) = event.handle_event(pbc.as_mut()).await {
+                    if let Err(err) = event
+                        .handle_event(pbc.as_mut())
+                        .instrument(trace_span!(parent: &span, "event", pbc = %name))
+                        .await
+                    {
                         error!(?err, "playback controller '{name}': {err}");
                     }
                 })

@@ -21,6 +21,7 @@ clap = { version = "4", features = ["derive"] }
 console-subscriber = { version = "0.5", optional = true }
 cpal = "0.16"
 dateparser = "0.2"
+derive_more = { version = "2.1.0", features = ["debug"] }
 directories = "6"
 futures = "0.3"
 globwalk = "0.9"
