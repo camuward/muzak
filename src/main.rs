@@ -17,6 +17,8 @@ mod settings;
 mod ui;
 mod util;
 
+const VERSION_STRING: &str = env!("HUMMINGBIRD_VERSION_STRING");
+
 static RUNTIME: LazyLock<tokio::runtime::Runtime> = LazyLock::new(|| {
     tokio::runtime::Builder::new_multi_thread()
         .enable_all()
@@ -48,7 +50,7 @@ fn main() -> anyhow::Result<()> {
     )
     .init();
 
-    tracing::info!("Starting application");
+    tracing::info!("version {VERSION_STRING}");
 
     crate::ui::app::run()
 }

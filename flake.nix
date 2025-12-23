@@ -51,6 +51,8 @@
               ])
             ];
             cargoExtraArgs = "--features=hummingbird/runtime_shaders";
+            HUMMINGBIRD_VERSION_ID = builtins.substring 0 7 (inputs.self.rev or "dirty");
+            HUMMINGBIRD_RELEASE_CHANNEL = "flake";
           }));
         craneArgs = mkArgs (prev: {cargoArtifacts = craneLib.buildDepsOnly prev;});
       in {
