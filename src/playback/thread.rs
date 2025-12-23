@@ -9,7 +9,7 @@ use std::{
 use itertools::Itertools as _;
 use rand::{rng, seq::SliceRandom};
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender, unbounded_channel};
-use tracing::{debug, error, info, trace, warn};
+use tracing::{debug, error, info, trace_span, warn};
 
 use crate::{
     devices::builtin::cpal::CpalProvider, media::errors::PlaybackStartError,
@@ -965,140 +965,75 @@ impl PlaybackThread {
         let Some(media_stream) = &mut self.media_stream else {
             return;
         };
-        if self.resampler.is_none() {
-            // TODO: proper error handling
-            // Read the first samples ahead of time to determine the format.
-            let first_samples = match media_stream.read_samples() {
-                Ok(samples) => samples,
-                Err(e) => match e {
-                    PlaybackReadError::InvalidState => {
-                        panic!("thread state is invalid: decoder state is invalid")
-                    }
-                    PlaybackReadError::NeverStarted => {
-                        panic!("thread state is invalid: playback never started")
-                    }
-                    PlaybackReadError::Eof => {
-                        info!("EOF, moving to next song");
-                        self.next(false);
-                        return;
-                    }
-                    PlaybackReadError::Unknown(s) => {
-                        error!("unknown decode error: {}", s);
-                        warn!("samples may be skipped");
-                        return;
-                    }
-                    PlaybackReadError::DecodeFatal(s) => {
-                        error!("fatal decoding error: {}, moving to next song", s);
-                        self.next(false);
-                        return;
-                    }
-                },
-            };
-
-            // Set up the resampler
-            let duration = media_stream.frame_duration().expect("can't get duration");
-            let device_format = stream.get_current_format().unwrap();
-
-            let resampler_sample_rate =
-                (device_format.sample_rate / device_format.rate_channel_ratio as u32) * 2;
-
-            self.resampler = Some(Resampler::new(
-                first_samples.rate,
-                resampler_sample_rate,
-                duration,
-                device_format.channels.count(),
-            ));
-            self.format = Some(device_format.clone());
-
-            // Convert the first samples to the device format
-            let converted = self
-                .resampler
-                .as_mut()
-                .unwrap()
-                .convert_formats(first_samples, self.format.as_ref().unwrap());
-
-            // Submit the converted samples to the stream
-            let submit_frame = stream.submit_frame(converted.clone());
-
-            // If we get an error, recreate the stream and retry
-            if submit_frame.is_err() {
-                let format = self.format.clone();
-                warn!(
-                    "Failed to submit frame, recreating device and retrying... {:?}",
-                    submit_frame.err().unwrap()
-                );
-                self.recreate_stream(true, format.map(|v| v.channels));
-                let final_result = self.stream.as_mut().unwrap().submit_frame(converted);
-
-                if final_result.is_err() {
-                    error!("Failed to submit frame after recreation");
-                    error!("This likely indicates a problem with the audio device or driver");
-                    error!("(or an underlying issue in the used DeviceProvider)");
-                    error!("Please check your audio setup and try again.");
-                    panic!("Failed to submit frame after recreation");
+        // TODO: proper error handling
+        // Read the first samples ahead of time to determine the format.
+        let first_samples = match media_stream.read_samples() {
+            Ok(samples) => samples,
+            Err(e) => match e {
+                PlaybackReadError::InvalidState => {
+                    panic!("thread state is invalid: decoder state is invalid")
                 }
-            }
-
-            self.update_ts();
-        } else {
-            // Ditto above but without creating the resampler
-            let samples = match media_stream.read_samples() {
-                Ok(samples) => samples,
-                Err(e) => match e {
-                    PlaybackReadError::InvalidState => {
-                        panic!("thread state is invalid: decoder state invalid")
-                    }
-                    PlaybackReadError::NeverStarted => {
-                        panic!("thread state is invalid: playback never started")
-                    }
-                    PlaybackReadError::Eof => {
-                        info!("EOF, moving to next song");
-                        self.next(false);
-                        return;
-                    }
-                    PlaybackReadError::Unknown(s) => {
-                        error!("unknown decode error: {}", s);
-                        warn!("samples may be skipped");
-                        return;
-                    }
-                    PlaybackReadError::DecodeFatal(s) => {
-                        error!("fatal decoding error: {}, moving to next song", s);
-                        self.next(false);
-                        return;
-                    }
-                },
-            };
-            let converted = self
-                .resampler
-                .as_mut()
-                .unwrap()
-                .convert_formats(samples, self.format.as_ref().unwrap());
-
-            trace!("Submitting frame");
-            let submit_frame = stream.submit_frame(converted.clone());
-            trace!("Finished submitting frame");
-
-            // If we get an error, recreate the stream and retry
-            if submit_frame.is_err() {
-                debug!("Submission error");
-                let format = self.format.clone();
-                warn!(
-                    "Failed to submit frame, recreating device and retrying... {:?}",
-                    submit_frame.err().unwrap()
-                );
-                self.recreate_stream(true, format.map(|v| v.channels));
-                let final_result = self.stream.as_mut().unwrap().submit_frame(converted);
-
-                if final_result.is_err() {
-                    error!("Failed to submit frame after recreation");
-                    error!("This likely indicates a problem with the audio device or driver");
-                    error!("(or an underlying issue in the used DeviceProvider)");
-                    error!("Please check your audio setup and try again.");
-                    panic!("Failed to submit frame after recreation");
+                PlaybackReadError::NeverStarted => {
+                    panic!("thread state is invalid: playback never started")
                 }
-            }
+                PlaybackReadError::Eof => {
+                    info!("EOF, moving to next song");
+                    self.next(false);
+                    return;
+                }
+                PlaybackReadError::Unknown(s) => {
+                    error!("unknown decode error: {}", s);
+                    warn!("samples may be skipped");
+                    return;
+                }
+                PlaybackReadError::DecodeFatal(s) => {
+                    error!("fatal decoding error: {}, moving to next song", s);
+                    self.next(false);
+                    return;
+                }
+            },
+        };
 
-            self.update_ts();
+        // Convert the first samples to the device format
+        let converted = self
+            .resampler
+            .get_or_insert_with(|| {
+                // Set up the resampler
+                let duration = media_stream.frame_duration().expect("can't get duration");
+                let device_format = stream.get_current_format().unwrap();
+
+                let resampler_sample_rate =
+                    (device_format.sample_rate / u32::from(device_format.rate_channel_ratio)) * 2;
+
+                self.format.replace(device_format.clone());
+
+                Resampler::new(
+                    first_samples.rate,
+                    resampler_sample_rate,
+                    duration,
+                    device_format.channels.count(),
+                )
+            })
+            .convert_formats(first_samples, self.format.as_ref().unwrap());
+
+        // Submit the converted samples to the stream. FIXME: cloning vec<vec> in hottest fn???
+        let s = trace_span!("submit_frame").entered();
+        if let Err(err) = stream.submit_frame(converted.clone()) {
+            // If we get an error, recreate the stream and retry
+            warn!(parent: &s, ?err, "Failed to submit frame: {err}");
+            warn!(parent: &s, "Recreating device and retrying...");
+            self.recreate_stream(true, self.format.as_ref().map(|v| v.channels.clone()));
+            if let Err(err) = self.stream.as_mut().unwrap().submit_frame(converted) {
+                error!(parent: &s, ?err, "Failed to submit frame after recreation: {err}");
+                error!(
+                    "This likely indicates a problem with the audio device or driver\n\
+                    (or an underlying issue in the used DeviceProvider)\n\
+                    Please check your audio setup and try again."
+                );
+                panic!("Failed to submit frame after recreation");
+            }
         }
+
+        self.update_ts();
     }
 }
