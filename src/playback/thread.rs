@@ -1,7 +1,7 @@
 use std::{
     env::consts::OS,
     mem::swap,
-    path::PathBuf,
+    path::Path,
     sync::{Arc, RwLock},
     thread::sleep,
 };
@@ -233,7 +233,7 @@ impl PlaybackThread {
             }
         }
 
-        self.media_provider = Some(Box::new(SymphoniaProvider::default()));
+        self.media_provider = Some(Box::new(SymphoniaProvider));
 
         // TODO: allow the user to pick a format on supported platforms
         self.recreate_stream(true, None);
@@ -291,10 +291,10 @@ impl PlaybackThread {
                 PlaybackCommand::Open(path) => {
                     if let Err(err) = self.open(&path) {
                         // todo: send error to the events channel, to display on the UI.
-                        error!("Failed to open media: {:?}", err);
+                        error!(path = %path.display(), ?err, "Failed to open media: {err}");
                     }
                 }
-                PlaybackCommand::Queue(v) => self.queue(v),
+                PlaybackCommand::Queue(v) => self.queue(&v),
                 PlaybackCommand::QueueList(v) => self.queue_list(v),
                 PlaybackCommand::Next => self.next(true),
                 PlaybackCommand::Previous => self.previous(),
@@ -345,12 +345,11 @@ impl PlaybackThread {
                     let result = self.stream.as_mut().unwrap().reset();
 
                     if let Err(err) = result {
-                        let format = self.format.clone();
                         warn!(
                             "Failed to reset stream, recreating device instead... {:?}",
                             err
                         );
-                        self.recreate_stream(true, format.map(|v| v.channels));
+                        self.recreate_stream(true, self.format.map(|v| v.channels));
                     }
 
                     self.pending_reset = false;
@@ -358,12 +357,11 @@ impl PlaybackThread {
 
                 let result = self.stream.as_mut().unwrap().play();
                 if let Err(err) = result {
-                    let format = self.format.clone();
                     warn!(
                         "Failed to restart playback, recreating device and retrying... {:?}",
                         err
                     );
-                    self.recreate_stream(true, format.map(|v| v.channels));
+                    self.recreate_stream(true, self.format.map(|v| v.channels));
                     let final_result = self.stream.as_mut().unwrap().play();
 
                     if final_result.is_err() {
@@ -390,8 +388,8 @@ impl PlaybackThread {
             drop(queue);
 
             if let Err(err) = self.open(&path) {
-                error!("Unable to open file: {:?}", err);
-            };
+                error!(path = %path.display(), ?err, "Unable to open file: {err}");
+            }
             self.events_tx
                 .send(PlaybackEvent::QueuePositionChanged(0))
                 .expect("unable to send event");
@@ -402,8 +400,8 @@ impl PlaybackThread {
     }
 
     /// Open a new track by given path.
-    fn open(&mut self, path: &PathBuf) -> Result<(), PlaybackStartError> {
-        info!("Opening: {:?}", path);
+    fn open(&mut self, path: &Path) -> Result<(), PlaybackStartError> {
+        info!("Opening track '{}'", path.display());
 
         if let Some(mut old_stream) = self.media_stream.take() {
             old_stream.close().ok();
@@ -424,14 +422,11 @@ impl PlaybackThread {
         {
             warn!("Failed to reset device, forcing recreation: {:?}", err);
             recreation_required = true;
-        };
+        }
 
-        let provider = self
-            .media_provider
-            .as_mut()
-            .ok_or(PlaybackStartError::MediaError(
-                "No media provider available".to_string(),
-            ))?;
+        let provider = self.media_provider.as_deref_mut().ok_or_else(|| {
+            PlaybackStartError::MediaError("No media provider available".to_owned())
+        })?;
 
         self.resampler = None;
         let src = std::fs::File::open(path)
@@ -450,9 +445,9 @@ impl PlaybackThread {
             PlaybackStartError::MediaError(format!("Unable to get channels: {}", e))
         })?;
 
-        let stream = self.stream.as_ref().ok_or(PlaybackStartError::StreamError(
-            "No audio stream available".to_string(),
-        ))?;
+        let stream = self.stream.as_deref().ok_or_else(|| {
+            PlaybackStartError::StreamError("No audio stream available".to_owned())
+        })?;
 
         let stream_channels = stream.get_current_format().map_err(|e| {
             PlaybackStartError::StreamError(format!("Unable to get stream format: {}", e))
@@ -470,9 +465,8 @@ impl PlaybackThread {
             recreation_required = true;
         }
 
-        let path = path.clone();
         self.events_tx
-            .send(PlaybackEvent::SongChanged(path))
+            .send(PlaybackEvent::SongChanged(path.to_owned()))
             .expect("unable to send event");
 
         if let Ok(duration) = media_stream.duration_secs() {
@@ -516,7 +510,7 @@ impl PlaybackThread {
             let path = queue[self.queue_next - 1].get_path().clone();
             drop(queue);
             if let Err(err) = self.open(&path) {
-                error!("Unable to open file: {:?}", err);
+                error!(path = %path.display(), ?err, "Unable to open file: {err}");
             }
             return;
         }
@@ -526,7 +520,7 @@ impl PlaybackThread {
             let path = queue[self.queue_next].get_path().clone();
             drop(queue);
             if let Err(err) = self.open(&path) {
-                error!("Unable to open file: {:?}", err);
+                error!(path = %path.display(), ?err, "Unable to open file: {err}");
             }
             self.events_tx
                 .send(PlaybackEvent::QueuePositionChanged(self.queue_next))
@@ -572,8 +566,8 @@ impl PlaybackThread {
             drop(queue);
 
             if let Err(err) = self.open(&path) {
-                error!("Unable to open file: {:?}", err);
-            };
+                error!(path = %path.display(), ?err, "Unable to open file: {err}");
+            }
             let new_position = self.queue_next - 1;
             self.events_tx
                 .send(PlaybackEvent::QueuePositionChanged(new_position))
@@ -590,13 +584,13 @@ impl PlaybackThread {
             debug!("queue_next: {}", self.queue_next);
 
             if let Err(err) = self.open(&path) {
-                error!("Unable to open file: {:?}", err);
-            };
+                error!(path = %path.display(), ?err, "Unable to open file: {err}");
+            }
         }
     }
 
-    /// Add a new QueueItemData to the queue. If nothing is playing, start playing it.
-    fn queue(&mut self, item: QueueItemData) {
+    /// Add a new [`QueueItemData`] to the queue. If nothing is playing, start playing it.
+    fn queue(&mut self, item: &QueueItemData) {
         info!("Adding file to queue: {}", item);
 
         let mut queue = self.queue.write().expect("couldn't get the queue");
@@ -614,8 +608,8 @@ impl PlaybackThread {
             let path = item.get_path();
 
             if let Err(err) = self.open(path) {
-                error!("Unable to open file: {:?}", err);
-            };
+                error!(path = %path.display(), ?err, "Unable to open file: {err}");
+            }
             self.queue_next = pre_len + 1;
             self.events_tx
                 .send(PlaybackEvent::QueuePositionChanged(pre_len))
@@ -627,8 +621,8 @@ impl PlaybackThread {
             .expect("unable to send event");
     }
 
-    /// Add a list of QueueItemData to the queue. If nothing is playing, start playing the first
-    /// track.
+    /// Add a list of [`QueueItemData`] to the queue. If nothing is playing, start playing the
+    /// first track.
     fn queue_list(&mut self, mut paths: Vec<QueueItemData>) {
         info!("Adding files to queue: {:?}", paths);
 
@@ -656,8 +650,8 @@ impl PlaybackThread {
             let path = first.get_path();
 
             if let Err(err) = self.open(path) {
-                error!("Unable to open file: {:?}", err);
-            };
+                error!(path = %path.display(), ?err, "Unable to open file: {err}");
+            }
             self.queue_next = pre_len + 1;
             self.events_tx
                 .send(PlaybackEvent::QueuePositionChanged(pre_len))
@@ -669,7 +663,7 @@ impl PlaybackThread {
             .expect("unable to send event");
     }
 
-    /// Emit a PositionChanged event if the timestamp has changed.
+    /// Emit a [`PositionChanged`] event if the timestamp has changed.
     fn update_ts(&mut self) {
         if let Some(stream) = &self.media_stream
             && let Ok(timestamp) = stream.position_secs()
@@ -704,8 +698,8 @@ impl PlaybackThread {
             drop(queue);
 
             if let Err(err) = self.open(&path) {
-                error!("Unable to open file: {:?}", err);
-            };
+                error!(path = %path.display(), ?err, "Unable to open file: {err}");
+            }
             self.queue_next = index + 1;
             self.events_tx
                 .send(PlaybackEvent::QueuePositionChanged(index))
@@ -760,8 +754,7 @@ impl PlaybackThread {
 
     /// Clear the current queue.
     fn clear_queue(&mut self) {
-        let mut queue = self.queue.write().expect("couldn't get the queue");
-        *queue = Vec::new();
+        self.queue.write().expect("couldn't get the queue").clear();
         self.original_queue = Vec::new();
         self.queue_next = 0;
 
@@ -820,7 +813,7 @@ impl PlaybackThread {
                     .expect("unable to send event");
             }
         } else {
-            self.original_queue = queue.clone();
+            self.original_queue.clone_from(&queue);
             let length = queue.len();
             queue[self.queue_next..length].shuffle(&mut rng());
             self.shuffle = true;
@@ -857,8 +850,8 @@ impl PlaybackThread {
         }
     }
 
-    /// Sets the repeat mode. The queue will loop infinitely when repeat mode is enabled. When repeat once mode is enabled If shuffle
-    /// mode is also enabled, the queue will be reshuffled when looped.
+    /// Sets the repeat mode. The queue will loop infinitely when repeat mode is enabled. When
+    /// both repeat-once and shuffle mode are enabled, the queue will be reshuffled when looped.
     fn set_repeat(&mut self, state: RepeatState) {
         self.repeat = if state == RepeatState::NotRepeating && self.playback_settings.always_repeat
         {
