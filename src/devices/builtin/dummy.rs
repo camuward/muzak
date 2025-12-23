@@ -62,25 +62,26 @@ impl DummyDevice {
             .unwrap_or(44100)
     }
 
-    pub fn get_bit_format() -> SampleFormat {
-        let string = env::var("HB_DUMMY_BIT_FORMAT")
-            .ok()
-            .unwrap_or("S16".to_string());
-
-        match string.as_str() {
-            "F64" => SampleFormat::Float64,
-            "F32" => SampleFormat::Float32,
-            "S32" => SampleFormat::Signed32,
-            "U32" => SampleFormat::Unsigned32,
-            "S24" => SampleFormat::Signed24,
-            "U24" => SampleFormat::Unsigned24,
-            "S16" => SampleFormat::Signed16,
-            "U16" => SampleFormat::Unsigned16,
-            "S8" => SampleFormat::Signed8,
-            "U8" => SampleFormat::Unsigned8,
-            "DSD" => SampleFormat::Dsd,
-            _ => SampleFormat::Unsupported,
-        }
+    pub fn get_bit_format() -> Result<SampleFormat, InfoError> {
+        let var = env::var("HB_DUMMY_BIT_FORMAT");
+        Ok(match var.as_deref() {
+            Ok("F64") => SampleFormat::Float64,
+            Ok("F32") => SampleFormat::Float32,
+            Ok("S32") => SampleFormat::Signed32,
+            Ok("U32") => SampleFormat::Unsigned32,
+            Ok("S24") => SampleFormat::Signed24,
+            Ok("U24") => SampleFormat::Unsigned24,
+            Ok("S16") => SampleFormat::Signed16,
+            Ok("U16") => SampleFormat::Unsigned16,
+            Ok("S8") => SampleFormat::Signed8,
+            Ok("U8") => SampleFormat::Unsigned8,
+            Ok("DSD") => SampleFormat::Dsd,
+            Err(std::env::VarError::NotPresent) => SampleFormat::Signed16,
+            Ok(_) => Err(InfoError::SampleFmt(var.unwrap()))?,
+            Err(std::env::VarError::NotUnicode(os)) => {
+                Err(InfoError::SampleFmt(os.to_string_lossy().into_owned()))?
+            }
+        })
     }
 
     pub fn get_channels() -> u16 {
@@ -107,7 +108,7 @@ impl Device for DummyDevice {
     fn get_supported_formats(&self) -> Result<Vec<SupportedFormat>, InfoError> {
         Ok(vec![SupportedFormat {
             originating_provider: "dummy",
-            sample_type: DummyDevice::get_bit_format(),
+            sample_type: DummyDevice::get_bit_format()?,
             sample_rates: (
                 DummyDevice::get_sample_rate(),
                 DummyDevice::get_sample_rate(),
@@ -120,7 +121,7 @@ impl Device for DummyDevice {
     fn get_default_format(&self) -> Result<FormatInfo, InfoError> {
         Ok(FormatInfo {
             originating_provider: "dummy",
-            sample_type: DummyDevice::get_bit_format(),
+            sample_type: DummyDevice::get_bit_format()?,
             sample_rate: DummyDevice::get_sample_rate(),
             buffer_size: BufferSize::Fixed(DummyDevice::get_buffer_size()),
             channels: ChannelSpec::Count(DummyDevice::get_channels()),

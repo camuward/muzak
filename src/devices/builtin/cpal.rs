@@ -69,17 +69,21 @@ impl From<cpal::Device> for CpalDevice {
     }
 }
 
-fn format_from_cpal(format: &cpal::SampleFormat) -> SampleFormat {
-    match format {
-        cpal::SampleFormat::I8 => SampleFormat::Signed8,
-        cpal::SampleFormat::I16 => SampleFormat::Signed16,
-        cpal::SampleFormat::I32 => SampleFormat::Signed32,
-        cpal::SampleFormat::U8 => SampleFormat::Unsigned8,
-        cpal::SampleFormat::U16 => SampleFormat::Unsigned16,
-        cpal::SampleFormat::U32 => SampleFormat::Unsigned32,
-        cpal::SampleFormat::F32 => SampleFormat::Float32,
-        cpal::SampleFormat::F64 => SampleFormat::Float64,
-        _ => SampleFormat::Unsupported, // should never happen
+impl TryFrom<cpal::SampleFormat> for SampleFormat {
+    type Error = InfoError;
+
+    fn try_from(value: cpal::SampleFormat) -> Result<Self, Self::Error> {
+        match value {
+            cpal::SampleFormat::I8 => Ok(SampleFormat::Signed8),
+            cpal::SampleFormat::I16 => Ok(SampleFormat::Signed16),
+            cpal::SampleFormat::I32 => Ok(SampleFormat::Signed32),
+            cpal::SampleFormat::U8 => Ok(SampleFormat::Unsigned8),
+            cpal::SampleFormat::U16 => Ok(SampleFormat::Unsigned16),
+            cpal::SampleFormat::U32 => Ok(SampleFormat::Unsigned32),
+            cpal::SampleFormat::F32 => Ok(SampleFormat::Float32),
+            cpal::SampleFormat::F64 => Ok(SampleFormat::Float64),
+            unsupported => Err(InfoError::SampleFmt(unsupported.to_string())),
+        }
     }
 }
 
@@ -180,19 +184,20 @@ impl Device for CpalDevice {
         Ok(self
             .device
             .supported_output_configs()?
-            .filter(|c| {
-                let format = c.sample_format();
-                format != cpal::SampleFormat::I64 && format != cpal::SampleFormat::U64
-            })
-            .map(|c| SupportedFormat {
-                originating_provider: "cpal",
-                sample_type: format_from_cpal(&c.sample_format()),
-                sample_rates: (c.min_sample_rate().0, c.max_sample_rate().0),
-                buffer_size: match c.buffer_size() {
-                    &cpal::SupportedBufferSize::Range { min, max } => BufferSize::Range(min, max),
-                    cpal::SupportedBufferSize::Unknown => BufferSize::Unknown,
-                },
-                channels: ChannelSpec::Count(c.channels()),
+            .filter_map(|c| {
+                let sample_type = c.sample_format().try_into().ok()?;
+                Some(SupportedFormat {
+                    originating_provider: "cpal",
+                    sample_type,
+                    sample_rates: (c.min_sample_rate().0, c.max_sample_rate().0),
+                    buffer_size: match c.buffer_size() {
+                        &cpal::SupportedBufferSize::Range { min, max } => {
+                            BufferSize::Range(min, max)
+                        }
+                        cpal::SupportedBufferSize::Unknown => BufferSize::Unknown,
+                    },
+                    channels: ChannelSpec::Count(c.channels()),
+                })
             })
             .collect())
     }
@@ -201,7 +206,7 @@ impl Device for CpalDevice {
         let format = self.device.default_output_config()?;
         Ok(FormatInfo {
             originating_provider: "cpal",
-            sample_type: format_from_cpal(&format.sample_format()),
+            sample_type: format.sample_format().try_into()?,
             sample_rate: format.sample_rate().0,
             buffer_size: match format.buffer_size() {
                 &cpal::SupportedBufferSize::Range { min, max } => BufferSize::Range(min, max),

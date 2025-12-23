@@ -156,7 +156,6 @@ pub fn match_bit_depth(target_frame: PlaybackFrame, target_depth: SampleFormat) 
             SampleFormat::Signed8 => Samples::Signed8(convert_samples(target_frame.samples)),
             SampleFormat::Unsigned8 => Samples::Unsigned8(convert_samples(target_frame.samples)),
             SampleFormat::Dsd => unimplemented!(),
-            SampleFormat::Unsupported => panic!("target depth is unsupported"),
         }
     } else {
         target_frame.samples

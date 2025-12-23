@@ -15,7 +15,6 @@ pub enum SampleFormat {
     Signed8,
     Unsigned8,
     Dsd,
-    Unsupported,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

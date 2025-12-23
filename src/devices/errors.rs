@@ -34,6 +34,8 @@ pub enum InfoError {
     RequiresOpenDevice,
     #[error("The selected device is always the default device and therefore is not consistent")]
     DeviceIsDefaultAlways,
+    #[error("Unsupported sample format `{0}` requested")]
+    SampleFmt(String),
     #[error("The requested device information is not available")]
     None,
     #[error("Unknown device error: `{0}`")]
