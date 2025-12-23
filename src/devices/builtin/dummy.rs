@@ -108,7 +108,10 @@ impl Device for DummyDevice {
         Ok(vec![SupportedFormat {
             originating_provider: "dummy",
             sample_type: DummyDevice::get_bit_format(),
-            sample_rates: DummyDevice::get_sample_rate()..DummyDevice::get_sample_rate(),
+            sample_rates: (
+                DummyDevice::get_sample_rate(),
+                DummyDevice::get_sample_rate(),
+            ),
             buffer_size: BufferSize::Fixed(DummyDevice::get_buffer_size()),
             channels: ChannelSpec::Count(DummyDevice::get_channels()),
         }])
@@ -121,8 +124,7 @@ impl Device for DummyDevice {
             sample_rate: DummyDevice::get_sample_rate(),
             buffer_size: BufferSize::Fixed(DummyDevice::get_buffer_size()),
             channels: ChannelSpec::Count(DummyDevice::get_channels()),
-            rate_channel_ratio: 2,
-            rate_channel_ratio_fixed: true,
+            rate_channel_ratio: Some(2),
         })
     }
 

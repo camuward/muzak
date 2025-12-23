@@ -264,7 +264,7 @@ impl Device for AudioGraphDevice {
         Ok(vec![SupportedFormat {
             originating_provider: "win_audiograph",
             sample_type: SampleFormat::Float32,
-            sample_rates: sample_rate..sample_rate,
+            sample_rates: (sample_rate, sample_rate),
             buffer_size: BufferSize::Fixed(buffer_size as u32),
             channels: ChannelSpec::Count(channels as u16),
         }])
@@ -282,8 +282,7 @@ impl Device for AudioGraphDevice {
             sample_rate,
             buffer_size: BufferSize::Fixed(buffer_size as u32),
             channels: ChannelSpec::Count(channels as u16),
-            rate_channel_ratio: 2,
-            rate_channel_ratio_fixed: true,
+            rate_channel_ratio: Some(2),
         })
     }
 

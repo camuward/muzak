@@ -901,52 +901,36 @@ impl PlaybackThread {
             return;
         }
 
-        let stream = if let Some(channels) = channels {
-            let mut format = device
-                .get_default_format()
-                .expect("failed to get device format");
-
-            if !format.rate_channel_ratio_fixed {
-                let old_channels = format.channels.count();
-                format.sample_rate =
-                    (format.sample_rate / old_channels as u32) * channels.count() as u32;
-                format.rate_channel_ratio = channels.count();
-            }
-
-            format.channels = channels;
-
-            let result = device.open_device(format.clone());
-            match result {
-                Ok(stream) => stream,
-                Err(err) => {
-                    warn!(
-                        "Failed to open device with requested format {:?}, error: {:?}",
-                        format, err
-                    );
+        let mut format = device
+            .get_default_format()
+            .expect("failed to get device format");
+        let requested = channels.map(|channels| FormatInfo {
+            channels,
+            sample_rate: if format.rate_channel_ratio.is_some() {
+                format.sample_rate
+            } else {
+                (format.sample_rate / u32::from(format.channels.count()))
+                    * u32::from(channels.count())
+            },
+            ..format
+        });
+        self.stream.replace(
+            if let Some(req) = requested
+                && let Ok(stream) = device.open_device(req).inspect_err(|e| {
+                    warn!(?format, "Failed to open device with requested format: {e}");
                     warn!("Falling back to default format");
-                    let format = device
-                        .get_default_format()
-                        .expect("failed to get device format");
-                    device
-                        .open_device(format)
-                        .expect("failed to open device with default format")
-                }
-            }
-        } else {
-            let format = device
-                .get_default_format()
-                .expect("failed to get device format");
-
-            device
-                .open_device(format)
-                .expect("failed to open device with default format")
-        };
+                })
+            {
+                format = req;
+                stream
+            } else {
+                device
+                    .open_device(format)
+                    .expect("failed to open device with default format")
+            },
+        );
 
         self.device = Some(device);
-        self.stream = Some(stream);
-
-        let format = self.stream.as_mut().unwrap().get_current_format().unwrap();
-
         info!(
             "Opened device: {:?}, format: {:?}, rate: {}, channel_count: {}",
             self.device.as_ref().unwrap().get_name(),
@@ -1000,21 +984,18 @@ impl PlaybackThread {
             .get_or_insert_with(|| {
                 // Set up the resampler
                 let duration = media_stream.frame_duration().expect("can't get duration");
-                let device_format = stream.get_current_format().unwrap();
+                let &device_format = stream.get_current_format().unwrap();
+                let count = device_format.channels.count();
 
-                let resampler_sample_rate =
-                    (device_format.sample_rate / u32::from(device_format.rate_channel_ratio)) * 2;
+                let resampler_sample_rate = 2
+                    * (device_format.sample_rate
+                        / u32::from(device_format.rate_channel_ratio.unwrap_or(count)));
 
-                self.format.replace(device_format.clone());
+                self.format.replace(device_format);
 
-                Resampler::new(
-                    first_samples.rate,
-                    resampler_sample_rate,
-                    duration,
-                    device_format.channels.count(),
-                )
+                Resampler::new(first_samples.rate, resampler_sample_rate, duration, count)
             })
-            .convert_formats(first_samples, self.format.as_ref().unwrap());
+            .convert_formats(first_samples, &self.format.unwrap());
 
         // Submit the converted samples to the stream. FIXME: cloning vec<vec> in hottest fn???
         let s = trace_span!("submit_frame").entered();
@@ -1022,7 +1003,7 @@ impl PlaybackThread {
             // If we get an error, recreate the stream and retry
             warn!(parent: &s, ?err, "Failed to submit frame: {err}");
             warn!(parent: &s, "Recreating device and retrying...");
-            self.recreate_stream(true, self.format.as_ref().map(|v| v.channels.clone()));
+            self.recreate_stream(true, self.format.map(|v| v.channels));
             if let Err(err) = self.stream.as_mut().unwrap().submit_frame(converted) {
                 error!(parent: &s, ?err, "Failed to submit frame after recreation: {err}");
                 error!(

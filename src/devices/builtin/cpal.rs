@@ -1,5 +1,3 @@
-use std::ops::Range;
-
 use crate::{
     devices::{
         errors::{
@@ -189,15 +187,9 @@ impl Device for CpalDevice {
             .map(|c| SupportedFormat {
                 originating_provider: "cpal",
                 sample_type: format_from_cpal(&c.sample_format()),
-                sample_rates: Range {
-                    start: c.min_sample_rate().0,
-                    end: c.max_sample_rate().0,
-                },
+                sample_rates: (c.min_sample_rate().0, c.max_sample_rate().0),
                 buffer_size: match c.buffer_size() {
-                    cpal::SupportedBufferSize::Range { min, max } => BufferSize::Range(Range {
-                        start: *min,
-                        end: *max,
-                    }),
+                    &cpal::SupportedBufferSize::Range { min, max } => BufferSize::Range(min, max),
                     cpal::SupportedBufferSize::Unknown => BufferSize::Unknown,
                 },
                 channels: ChannelSpec::Count(c.channels()),
@@ -212,19 +204,15 @@ impl Device for CpalDevice {
             sample_type: format_from_cpal(&format.sample_format()),
             sample_rate: format.sample_rate().0,
             buffer_size: match format.buffer_size() {
-                cpal::SupportedBufferSize::Range { min, max } => BufferSize::Range(Range {
-                    start: *min,
-                    end: *max,
-                }),
+                &cpal::SupportedBufferSize::Range { min, max } => BufferSize::Range(min, max),
                 cpal::SupportedBufferSize::Unknown => BufferSize::Unknown,
             },
             channels: ChannelSpec::Count(format.channels()),
             rate_channel_ratio: if cfg!(target_os = "windows") {
-                2
+                Some(2)
             } else {
-                format.channels()
+                None
             },
-            rate_channel_ratio_fixed: cfg!(target_os = "windows"),
         })
     }
 

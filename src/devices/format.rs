@@ -1,7 +1,3 @@
-#![allow(dead_code)]
-
-use std::ops::Range;
-
 use bitflags::bitflags;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -22,29 +18,30 @@ pub enum SampleFormat {
     Unsupported,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ChannelSpec {
     Bitmask(Channels),
     Count(u16),
 }
 
 impl ChannelSpec {
-    pub fn count(&self) -> u16 {
+    pub fn count(self) -> u16 {
         match self {
-            ChannelSpec::Bitmask(channels) => channels.count() as u16,
-            ChannelSpec::Count(count) => *count,
+            ChannelSpec::Bitmask(channels) => channels.count(),
+            ChannelSpec::Count(count) => count,
         }
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BufferSize {
-    Range(Range<u32>),
+    /// Inclusive range of supported buffer sizes.
+    Range(u32, u32),
     Fixed(u32),
     Unknown,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct FormatInfo {
     pub originating_provider: &'static str,
     pub sample_type: SampleFormat,
@@ -56,19 +53,19 @@ pub struct FormatInfo {
     /// On some implementations the sample rate is the device's fixed sample rate; on others it is
     /// the sample rate of the current stream. `rate_channel_ratio` is used to determine the number
     /// of channels for the current sample rate, if the number of channels is fixed.
-    pub rate_channel_ratio: u16,
-    pub rate_channel_ratio_fixed: bool,
+    pub rate_channel_ratio: Option<u16>,
 }
 pub struct SupportedFormat {
     pub originating_provider: &'static str,
     pub sample_type: SampleFormat,
-    pub sample_rates: Range<u32>,
+    /// Lowest and highest supported sample rates.
+    pub sample_rates: (u32, u32),
     pub buffer_size: BufferSize,
     pub channels: ChannelSpec,
 }
 
 bitflags! {
-    #[derive(Default, Debug, Clone, PartialEq)]
+    #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
     pub struct Channels: u32 {
         const FRONT_LEFT            = 0x1;
         const FRONT_RIGHT           = 0x2;
@@ -92,8 +89,8 @@ bitflags! {
 }
 
 impl Channels {
-    pub fn count(&self) -> u32 {
-        self.bits().count_ones()
+    pub fn count(self) -> u16 {
+        self.bits().count_ones().try_into().expect("infallible")
     }
 }
 
@@ -107,7 +104,7 @@ pub enum Layout {
 }
 
 impl Layout {
-    pub fn channels(&self) -> Channels {
+    pub fn channels(self) -> Channels {
         match self {
             Layout::Mono => Channels::FRONT_LEFT,
             Layout::Stereo => Channels::FRONT_LEFT | Channels::FRONT_RIGHT,
