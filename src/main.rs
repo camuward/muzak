@@ -42,7 +42,7 @@ fn main() -> anyhow::Result<()> {
     reg.with(
         tracing_subscriber::fmt::layer()
             .with_thread_names(true) // nice to have until we replace with tasks
-            .with_span_events(FmtSpan::FULL) // there's nothing below debug_span
+            .with_span_events(FmtSpan::NEW | FmtSpan::CLOSE) // async can be noisy
             .with_timer(tracing_subscriber::fmt::time::uptime()) // date's useless
             .with_filter(env),
     )
