@@ -5,7 +5,6 @@ use gpui::{
     Window, div, px,
 };
 use nucleo::Utf32String;
-use tracing::error;
 
 use crate::{
     library::{
@@ -70,10 +69,7 @@ impl UpdatePlaylist {
             let show_clone = show.clone();
 
             let on_accept: OnAccept = Box::new(move |playlist, cx| {
-                if let Err(err) = import_playlist(cx, playlist.id) {
-                    error!("Failed to import playlist: {}", err);
-                }
-
+                import_playlist(cx, playlist.id);
                 show_clone.write(cx, false);
             });
 
@@ -104,9 +100,7 @@ impl UpdatePlaylist {
                     on_accept: Arc::new(move |cx| {
                         let playlist_id = cx.create_playlist(&name_string).unwrap();
 
-                        if let Err(err) = import_playlist(cx, playlist_id) {
-                            error!("Failed to import playlist: {}", err);
-                        }
+                        import_playlist(cx, playlist_id);
 
                         show_clone2.write(cx, false);
                     }),

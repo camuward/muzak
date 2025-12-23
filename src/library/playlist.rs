@@ -1,13 +1,12 @@
 use std::{ffi::OsStr, path::PathBuf};
 
-use futures::future::join_all;
+use anyhow::Context as _;
+use compact_str::CompactString;
+use futures::{StreamExt as _, TryFutureExt as _, TryStreamExt as _};
 use gpui::{App, PathPromptOptions};
 use sqlx::{Sqlite, SqlitePool};
-use tokio::{
-    fs::File,
-    io::{AsyncBufReadExt, AsyncWriteExt},
-};
-use tracing::error;
+use tokio::{fs::File, io::BufWriter};
+use tracing::{Instrument as _, debug_span, error, info, warn};
 
 use crate::ui::{
     app::Pool,
@@ -22,132 +21,134 @@ const LINE_ENDING: &str = "\n";
 #[derive(sqlx::FromRow)]
 struct PlaylistEntry {
     location: String,
-    duration: i64,
-    track_artist_names: String,
-    artist_name: String,
-    track_title: String,
-    album_title: String,
+    duration: u32,
+    track_artist_names: CompactString,
+    artist_name: CompactString,
+    track_title: CompactString,
+    album_title: CompactString,
 }
 
-async fn make_m3u(pool: &SqlitePool, pl_id: i64) -> anyhow::Result<String> {
-    let mut output = String::new();
+async fn write_m3u(mut w: BufWriter<File>, pool: &SqlitePool, pl_id: i64) -> anyhow::Result<()> {
+    use tokio::io::AsyncWriteExt as _;
 
-    output.push_str(&format!("#EXTM3U{LINE_ENDING}"));
+    w.write_all(b"#EXTM3U").await?;
 
-    let query = include_str!("../../queries/playlist/list_tracks_for_export.sql");
-    let data: Vec<PlaylistEntry> = sqlx::query_as(query).bind(pl_id).fetch_all(pool).await?;
+    {
+        let query = include_str!("../../queries/playlist/list_tracks_for_export.sql");
+        let mut entries = sqlx::query_as(query).bind(pl_id).fetch(pool);
+        let mut buf = vec![];
+        while let Some(PlaylistEntry {
+            location,
+            duration,
+            track_artist_names,
+            artist_name,
+            track_title,
+            album_title,
+        }) = entries.try_next().await?
+        {
+            use std::io::Write as _;
+            write!(
+                &mut buf,
+                "{LINE_ENDING}\
+                #EXTINF:{duration},{track_artist_names} - {track_title}{LINE_ENDING}\
+                #EXTALB:{album_title}{LINE_ENDING}\
+                #EXTART:{artist_name}{LINE_ENDING}\
+                {location}{LINE_ENDING}",
+            )?;
 
-    data.iter().for_each(|entry| {
-        output.push_str(&format!(
-            "#EXTINF:{},{} - {}{LINE_ENDING}",
-            entry.duration, entry.track_artist_names, entry.track_title
-        ));
-        output.push_str(&format!("#EXTALB:{}{LINE_ENDING}", entry.album_title));
-        output.push_str(&format!("#EXTART:{}{LINE_ENDING}", entry.artist_name));
-        output.push_str(&format!("{}{LINE_ENDING}", entry.location));
-        output.push_str(LINE_ENDING);
-    });
+            w.write_all(&buf).await?;
+            buf.clear();
+        }
+    }
 
-    Ok(output)
+    w.shutdown().await?;
+    Ok(())
 }
 
-pub fn export_playlist(cx: &mut App, pl_id: i64, playlist_name: &str) -> anyhow::Result<()> {
-    let dirs = directories::UserDirs::new()
-        .ok_or_else(|| anyhow::anyhow!("Failed to get user directory"))?;
-    let dir = dirs
-        .document_dir()
-        .ok_or_else(|| anyhow::anyhow!("Failed to get documents directory"))?;
-
-    let suggested_name = format!("{playlist_name}.m3u8");
-
-    let path_future = cx.prompt_for_new_path(dir, Some(&suggested_name));
-
+pub fn export_playlist(cx: &App, pl_id: i64, playlist_name: &str) -> anyhow::Result<()> {
+    let path_future = cx.prompt_for_new_path(
+        directories::UserDirs::new()
+            .context("Failed to get user directories")?
+            .document_dir()
+            .context("Failed to get documents directory")?,
+        Some(&format!("{playlist_name}.m3u8")),
+    );
     let pool = cx.global::<Pool>().0.clone();
 
     crate::RUNTIME.spawn(async move {
-        let result = async {
-            let path = path_future.await??;
+        let path = match path_future.err_into().await.flatten() {
+            Ok(Some(path)) => path,
+            Ok(None) => return info!("Playlist export cancelled by user"),
+            Err(err) => return error!(?err, "Failed to prompt for path: {err}"),
+        };
 
-            if let Some(path) = path {
-                let output = make_m3u(&pool, pl_id).await?;
-                let mut file = File::create(path).await?;
-                file.write_all(output.as_bytes()).await?;
-            }
-
-            anyhow::Ok(())
-        }
-        .await;
-
-        if let Err(err) = result {
-            error!("Failed to export playlist: {err}");
+        if let Err(err) = File::create(&path)
+            .err_into()
+            .map_ok(BufWriter::new)
+            .and_then(|f| write_m3u(f, &pool, pl_id))
+            .instrument(debug_span!("export_playlist", pl_id, path = %path.display()))
+            .await
+        {
+            error!(?err, "Failed writing playlist to {}: {err}", path.display());
         }
     });
 
     Ok(())
 }
 
+#[derive(Debug, Default)]
 struct M3UEntry {
     duration: Option<u32>,
-    track_artist_names: Option<String>,
-    track_title: Option<String>,
-    album_title: Option<String>,
-    artist_name: Option<String>,
+    track_artist_names: Option<CompactString>,
+    track_title: Option<CompactString>,
+    album_title: Option<CompactString>,
+    artist_name: Option<CompactString>,
     location: PathBuf,
 }
 
-async fn parse_m3u(path: &PathBuf) -> anyhow::Result<Vec<M3UEntry>> {
-    let file = File::open(path).await?;
-    let reader = tokio::io::BufReader::new(file);
-    let mut lines = reader.lines();
+fn parse_m3u(file: File) -> impl futures::Stream<Item = anyhow::Result<M3UEntry>> {
+    use tokio::io::{AsyncBufReadExt as _, BufReader};
+    use tokio_stream::wrappers::LinesStream;
 
-    let mut entries = Vec::new();
-    let mut current_entry = M3UEntry {
-        duration: None,
-        track_artist_names: None,
-        track_title: None,
-        album_title: None,
-        artist_name: None,
-        location: PathBuf::new(),
-    };
+    let lines = LinesStream::new(BufReader::new(file).lines()).enumerate();
+    futures::stream::try_unfold(lines, async |mut lines| {
+        let mut current_entry = M3UEntry::default();
+        while let Some((line, res)) = lines.next().await {
+            let txt = res.inspect_err(|err| error!(%line, ?err, "IO error: {err}"))?;
+            if let Some(line) = txt.strip_prefix("#EXTINF:") {
+                let Some((dur, info)) = line.split_once(',') else {
+                    continue;
+                };
 
-    while let Some(line) = lines.next_line().await? {
-        if let Some(line) = line.strip_prefix("#EXTINF:") {
-            let info: Vec<&str> = line.splitn(2, ',').collect();
-
-            if info.len() == 2 {
-                current_entry.duration = info[0].parse::<u32>().ok();
-
-                let delims = ['-', ':', '–'];
-                let title_artist: Vec<&str> = info[1].splitn(2, &delims).collect();
-                if title_artist.len() == 2 {
-                    current_entry.track_artist_names = Some(title_artist[0].trim().to_string());
-                    current_entry.track_title = Some(title_artist[1].trim().to_string());
-                } else {
-                    current_entry.track_title = Some(info[1].to_string());
+                match dur.parse() {
+                    Ok(dur) => current_entry.duration = Some(dur),
+                    Err(err) => warn!(%line, ?err, "Failed to parse track duration: {err}"),
                 }
-            }
-        } else if let Some(album_title) = line.strip_prefix("#EXTALB:") {
-            current_entry.album_title = Some(album_title.to_string());
-        } else if let Some(artist_name) = line.strip_prefix("#EXTART:") {
-            current_entry.artist_name = Some(artist_name.to_string());
-        } else if !line.starts_with('#') && !line.is_empty() {
-            current_entry.location = line.into();
-            entries.push(current_entry);
-            current_entry = M3UEntry {
-                duration: None,
-                track_artist_names: None,
-                track_title: None,
-                album_title: None,
-                artist_name: None,
-                location: PathBuf::new(),
-            };
-        }
-    }
 
-    Ok(entries)
+                if let Some((artist, title)) = info.split_once(['-', ':', '\u{2013}']) {
+                    current_entry.track_artist_names = Some(artist.trim().into());
+                    current_entry.track_title = Some(title.trim().into());
+                } else {
+                    current_entry.track_title = Some(info.trim().into());
+                }
+            } else if let Some(album_title) = txt.strip_prefix("#EXTALB:") {
+                current_entry.album_title = Some(album_title.into());
+            } else if let Some(artist_name) = txt.strip_prefix("#EXTART:") {
+                current_entry.artist_name = Some(artist_name.into());
+            } else if !txt.starts_with('#') && !txt.is_empty() {
+                current_entry.location = txt.into();
+                tracing::debug!("Parsed track: {current_entry:?}");
+                return Ok(Some((current_entry, lines)));
+            } else {
+                tracing::debug!(%line, "Ignoring line: '{txt}'");
+            }
+        }
+
+        Ok(None)
+    })
 }
 
-pub fn import_playlist(cx: &mut App, playlist_id: i64) -> anyhow::Result<()> {
+pub fn import_playlist(cx: &App, playlist_id: i64) {
     let path_future = cx.prompt_for_paths(PathPromptOptions {
         files: true,
         directories: false,
@@ -159,73 +160,69 @@ pub fn import_playlist(cx: &mut App, playlist_id: i64) -> anyhow::Result<()> {
     let playlist_tracker = cx.global::<Models>().playlist_tracker.clone();
 
     cx.spawn(async move |cx| {
-        crate::RUNTIME
-            .spawn(async move {
-                let result = async {
-                    let path = path_future.await??;
+        let task = crate::RUNTIME.spawn(async move {
+            let Some(path) = path_future.await??.and_then(|v| v.into_iter().next()) else {
+                info!("Playlist import cancelled by user");
+                return anyhow::Ok(());
+            };
 
-                    if let Some(path) = path.as_ref().and_then(|v| v.first()) {
-                        let data = parse_m3u(path).await?;
+            let span = tracing::debug_span!("import_playlist", playlist_id, path = %path.display());
+            let ids: Vec<i64> = parse_m3u(File::open(path).await?)
+                .map_ok(|entry| {
+                    let lookup_query = include_str!("../../queries/playlist/lookup_track.sql");
+                    sqlx::query_scalar::<Sqlite, i64>(lookup_query)
+                        .bind(entry.location.to_string_lossy().into_owned())
+                        .bind(entry.track_title)
+                        .bind(entry.artist_name)
+                        .bind(entry.album_title)
+                        .bind(entry.track_artist_names)
+                        .bind(entry.duration)
+                        .bind(format!(
+                            "%{}%",
+                            entry
+                                .location
+                                .file_stem()
+                                .and_then(OsStr::to_str)
+                                .unwrap_or_default()
+                        ))
+                        .fetch_one(&pool)
+                        .err_into()
+                })
+                .try_buffered(8)
+                .try_collect()
+                .instrument(debug_span!(parent: &span, "lookup_tracks"))
+                .await?;
 
-                        let lookup_query = include_str!("../../queries/playlist/lookup_track.sql");
-                        let iter = data.into_iter().map(|entry| {
-                            sqlx::query_scalar::<Sqlite, i64>(lookup_query)
-                                .bind(entry.location.to_string_lossy().to_string())
-                                .bind(entry.track_title)
-                                .bind(entry.artist_name)
-                                .bind(entry.album_title)
-                                .bind(entry.track_artist_names)
-                                .bind(entry.duration)
-                                .bind(format!(
-                                    "%{}%",
-                                    entry
-                                        .location
-                                        .file_stem()
-                                        .and_then(OsStr::to_str)
-                                        .unwrap_or_default()
-                                ))
-                                .fetch_one(&pool)
-                        });
+            let mut tx = pool.begin().await?;
 
-                        let ids = join_all(iter).await.into_iter().flatten();
+            let reset_query = include_str!("../../queries/playlist/empty_playlist.sql");
+            sqlx::query(reset_query)
+                .bind(playlist_id)
+                .execute(&mut *tx)
+                .await?;
 
-                        let mut tx = pool.begin().await?;
+            let insert_query = include_str!("../../queries/playlist/add_track.sql");
+            for track_id in ids {
+                sqlx::query(insert_query)
+                    .bind(playlist_id)
+                    .bind(track_id)
+                    .execute(&mut *tx)
+                    .instrument(debug_span!(parent: &span, "insert_track", track_id))
+                    .await?;
+            }
 
-                        let reset_query = include_str!("../../queries/playlist/empty_playlist.sql");
-                        sqlx::query(reset_query)
-                            .bind(playlist_id)
-                            .execute(&mut *tx)
-                            .await?;
+            tx.commit().await?;
 
-                        let insert_query = include_str!("../../queries/playlist/add_track.sql");
+            anyhow::Ok(())
+        });
 
-                        for track_id in ids {
-                            sqlx::query(insert_query)
-                                .bind(playlist_id)
-                                .bind(track_id)
-                                .execute(&mut *tx)
-                                .await?;
-                        }
-
-                        tx.commit().await?;
-                    }
-
-                    anyhow::Ok(())
-                }
-                .await;
-
-                if let Err(err) = result {
-                    error!("Failed to import playlist: {err}");
-                }
-            })
-            .await
-            .ok();
-
-        playlist_tracker.update(cx, |_, cx| {
-            cx.emit(PlaylistEvent::PlaylistUpdated(playlist_id))
-        })
+        if let Err(err) = task.err_into().await.flatten() {
+            error!(?err, "Failed to import playlist: {err}");
+        } else if let Err(err) = playlist_tracker.update(cx, |_, cx| {
+            cx.emit(PlaylistEvent::PlaylistUpdated(playlist_id));
+        }) {
+            error!(?err, "Failed to update playlist tracker: {err}");
+        }
     })
     .detach();
-
-    Ok(())
 }

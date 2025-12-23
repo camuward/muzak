@@ -884,6 +884,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "castaway"
+version = "0.2.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "dec551ab6e7578819132c713a93c022a05d60159dc86e7a7050223577484c55a"
+dependencies = [
+ "rustversion",
+]
+
+[[package]]
 name = "cbc"
 version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1143,6 +1152,21 @@ checksum = "f849b92c694fe237ecd8fafd1ba0df7ae0d45c1df6daeb7f68ed4220d51640bd"
 dependencies = [
  "nix 0.30.1",
  "thiserror 2.0.17",
+]
+
+[[package]]
+name = "compact_str"
+version = "0.9.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3fdb1325a1cece981e8a296ab8f0f9b63ae357bd0784a9faaf548cc7b480707a"
+dependencies = [
+ "castaway",
+ "cfg-if",
+ "itoa",
+ "rustversion",
+ "ryu",
+ "sqlx",
+ "static_assertions",
 ]
 
 [[package]]
@@ -3064,6 +3088,7 @@ dependencies = [
  "block2",
  "chrono",
  "clap",
+ "compact_str",
  "console-subscriber",
  "cpal",
  "dateparser",
@@ -3105,6 +3130,7 @@ dependencies = [
  "symphonia-adapter-libopus",
  "thiserror 2.0.17",
  "tokio",
+ "tokio-stream",
  "tracing",
  "tracing-subscriber",
  "unicode-segmentation",
