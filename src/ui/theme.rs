@@ -192,12 +192,12 @@ impl Default for Theme {
             button_warning_border_active: rgb(0x80683F),
             button_warning_text: rgb(0xF0EBDE),
 
-            button_danger: rgb(0xCD0B0B),
-            button_danger_border: rgb(0xA00808),
-            button_danger_hover: rgb(0xE80C0C),
-            button_danger_border_hover: rgb(0xCF0B0B),
-            button_danger_active: rgb(0xB70A0A),
-            button_danger_border_active: rgb(0x990707),
+            button_danger: rgb(0x650B0B),
+            button_danger_border: rgb(0x860808),
+            button_danger_hover: rgb(0x750C0C),
+            button_danger_border_hover: rgb(0x8F0B0B),
+            button_danger_active: rgb(0x440A0A),
+            button_danger_border_active: rgb(0x650707),
             button_danger_text: rgb(0xE9D4D4),
 
             slider_foreground: rgb(0x688CF0),

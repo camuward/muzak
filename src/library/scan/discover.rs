@@ -128,12 +128,21 @@ pub async fn cleanup_removed_directories(
 }
 
 /// Remove scan_record entries whose files no longer exist on disk, and delete the corresponding
-/// tracks from the database.
-pub async fn cleanup(pool: &SqlitePool, scan_record: &mut ScanRecord) {
+/// tracks from the database, excluding entries under `excluded_roots`.
+pub async fn cleanup_with_exclusions(
+    pool: &SqlitePool,
+    scan_record: &mut ScanRecord,
+    excluded_roots: &[Utf8PathBuf],
+) {
     let to_delete: Vec<Utf8PathBuf> = scan_record
         .records
         .keys()
-        .filter(|path| !path.exists())
+        .filter(|path| {
+            !path.exists()
+                && !excluded_roots
+                    .iter()
+                    .any(|excluded_root| path.starts_with(excluded_root))
+        })
         .cloned()
         .collect();
 

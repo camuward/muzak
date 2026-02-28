@@ -46,3 +46,4 @@ pub const LIST: &str = "!bundled:icons/layout-list.svg";
 pub const LIST_INACTIVE: &str = "!bundled:icons/layout-list-inactive.svg";
 pub const USERS: &str = "!bundled:icons/users.svg";
 pub const SORT: &str = "!bundled:icons/sort.svg";
+pub const FOLDER_X: &str = "!bundled:icons/folder-x.svg";

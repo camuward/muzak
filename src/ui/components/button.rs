@@ -165,6 +165,7 @@ pub struct Button {
     pub(self) style: ButtonStyle,
     pub(self) size: ButtonSize,
     pub(self) intent: ButtonIntent,
+    pub(self) refinement: StyleRefinement,
 }
 
 impl Button {
@@ -189,13 +190,14 @@ impl Button {
             size: self.size,
             style: self.style,
             intent: self.intent,
+            refinement: self.refinement,
         }
     }
 }
 
 impl Styled for Button {
     fn style(&mut self) -> &mut StyleRefinement {
-        self.div.style()
+        &mut self.refinement
     }
 }
 
@@ -211,7 +213,10 @@ impl RenderOnce for Button {
         let size = self.size;
         let intent = self.intent;
 
-        style.base(size.base(intent.base(self.div.hover(|v| style.hover(intent.hover(v, cx))), cx)))
+        let mut div = style
+            .base(size.base(intent.base(self.div.hover(|v| style.hover(intent.hover(v, cx))), cx)));
+        div.style().refine(&self.refinement);
+        div
     }
 }
 
@@ -221,6 +226,7 @@ pub struct InteractiveButton {
     pub(self) style: ButtonStyle,
     pub(self) size: ButtonSize,
     pub(self) intent: ButtonIntent,
+    pub(self) refinement: StyleRefinement,
 }
 
 impl InteractiveButton {
@@ -247,7 +253,7 @@ impl InteractiveButton {
 
 impl Styled for InteractiveButton {
     fn style(&mut self) -> &mut StyleRefinement {
-        self.div.style()
+        &mut self.refinement
     }
 }
 
@@ -263,7 +269,7 @@ impl RenderOnce for InteractiveButton {
         let size = self.size;
         let intent = self.intent;
 
-        style.base(
+        let mut div = style.base(
             size.base(
                 intent.base(
                     self.div
@@ -272,7 +278,10 @@ impl RenderOnce for InteractiveButton {
                     cx,
                 ),
             ),
-        )
+        );
+
+        div.style().refine(&self.refinement);
+        div
     }
 }
 
@@ -282,5 +291,6 @@ pub fn button() -> Button {
         style: ButtonStyle::Regular,
         size: ButtonSize::Regular,
         intent: ButtonIntent::Secondary,
+        refinement: StyleRefinement::default(),
     }
 }

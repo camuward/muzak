@@ -85,7 +85,7 @@
   },
   "ACTION_GROUP_PLAYLIST": {
     "context": "library.rs",
-    "definedIn": "src/ui/library.rs:294",
+    "definedIn": "src/ui/library.rs:295",
     "plural": false,
     "description": null
   },
@@ -97,7 +97,7 @@
   },
   "ACTION_IMPORT_PLAYLIST": {
     "context": "library.rs",
-    "definedIn": "src/ui/library.rs:295",
+    "definedIn": "src/ui/library.rs:296",
     "plural": false,
     "description": null
   },
@@ -517,67 +517,145 @@
   },
   "SCAN": {
     "context": "library.rs",
-    "definedIn": "src/ui/settings/library.rs:203",
+    "definedIn": "src/ui/settings/library.rs:276",
     "plural": false,
     "description": null
   },
   "SCANNING": {
     "context": "library.rs",
-    "definedIn": "src/ui/settings/library.rs:167",
+    "definedIn": "src/ui/settings/library.rs:224",
     "plural": false,
     "description": null
   },
   "SCANNING_ADD_FOLDER": {
     "context": "library.rs",
-    "definedIn": "src/ui/settings/library.rs:181",
+    "definedIn": "src/ui/settings/library.rs:238",
     "plural": false,
     "description": null
   },
-  "SCANNING_NO_FOLDERS": {
+  "SCANNING_MISSING_DIALOG_BODY": {
+    "context": "missing_folder_dialog.rs",
+    "definedIn": "src/ui/library/missing_folder_dialog.rs:178",
+    "plural": false,
+    "description": null
+  },
+  "SCANNING_MISSING_DIALOG_DELETE": {
+    "context": "missing_folder_dialog.rs",
+    "definedIn": "src/ui/library/missing_folder_dialog.rs:250",
+    "plural": false,
+    "description": null
+  },
+  "SCANNING_MISSING_DIALOG_DELETE_SUBTITLE": {
+    "context": "missing_folder_dialog.rs",
+    "definedIn": "src/ui/library/missing_folder_dialog.rs:252",
+    "plural": false,
+    "description": null
+  },
+  "SCANNING_MISSING_DIALOG_DONT_ASK_AGAIN": {
+    "context": "missing_folder_dialog.rs",
+    "definedIn": "src/ui/library/missing_folder_dialog.rs:285",
+    "plural": false,
+    "description": null
+  },
+  "SCANNING_MISSING_DIALOG_DONT_ASK_HINT": {
+    "context": "missing_folder_dialog.rs",
+    "definedIn": "src/ui/library/missing_folder_dialog.rs:296",
+    "plural": false,
+    "description": null
+  },
+  "SCANNING_MISSING_DIALOG_KEEP": {
+    "context": "missing_folder_dialog.rs",
+    "definedIn": "src/ui/library/missing_folder_dialog.rs:234",
+    "plural": false,
+    "description": null
+  },
+  "SCANNING_MISSING_DIALOG_KEEP_SUBTITLE": {
+    "context": "missing_folder_dialog.rs",
+    "definedIn": "src/ui/library/missing_folder_dialog.rs:236",
+    "plural": false,
+    "description": null
+  },
+  "SCANNING_MISSING_DIALOG_TITLE": {
+    "context": "missing_folder_dialog.rs",
+    "definedIn": "src/ui/library/missing_folder_dialog.rs:160",
+    "plural": false,
+    "description": null
+  },
+  "SCANNING_MISSING_POLICY": {
     "context": "library.rs",
-    "definedIn": "src/ui/settings/library.rs:103",
+    "definedIn": "src/ui/settings/library.rs:252",
     "plural": false,
     "description": null
   },
-  "SCANNING_RESCAN_REQUIRED": {
+  "SCANNING_MISSING_POLICY_ASK": {
     "context": "library.rs",
-    "definedIn": "src/ui/settings/library.rs:194",
+    "definedIn": "src/ui/settings/library.rs:42",
     "plural": false,
     "description": null
   },
-  "SCANNING_RESCAN_REQUIRED_TITLE": {
+  "SCANNING_MISSING_POLICY_DELETE": {
     "context": "library.rs",
-    "definedIn": "src/ui/settings/library.rs:197",
+    "definedIn": "src/ui/settings/library.rs:50",
     "plural": false,
     "description": null
   },
-  "SCANNING_SELECT_FOLDER": {
+  "SCANNING_MISSING_POLICY_KEEP": {
     "context": "library.rs",
     "definedIn": "src/ui/settings/library.rs:46",
     "plural": false,
     "description": null
   },
+  "SCANNING_MISSING_POLICY_SUBTEXT": {
+    "context": "library.rs",
+    "definedIn": "src/ui/settings/library.rs:257",
+    "plural": false,
+    "description": null
+  },
+  "SCANNING_NO_FOLDERS": {
+    "context": "library.rs",
+    "definedIn": "src/ui/settings/library.rs:160",
+    "plural": false,
+    "description": null
+  },
+  "SCANNING_RESCAN_REQUIRED": {
+    "context": "library.rs",
+    "definedIn": "src/ui/settings/library.rs:267",
+    "plural": false,
+    "description": null
+  },
+  "SCANNING_RESCAN_REQUIRED_TITLE": {
+    "context": "library.rs",
+    "definedIn": "src/ui/settings/library.rs:270",
+    "plural": false,
+    "description": null
+  },
+  "SCANNING_SELECT_FOLDER": {
+    "context": "library.rs",
+    "definedIn": "src/ui/settings/library.rs:102",
+    "plural": false,
+    "description": null
+  },
   "SCANNING_SUBTITLE": {
     "context": "library.rs",
-    "definedIn": "src/ui/settings/library.rs:169",
+    "definedIn": "src/ui/settings/library.rs:226",
     "plural": false,
     "description": null
   },
   "SCAN_COMPLETE_WATCHING": {
     "context": "header.rs",
-    "definedIn": "src/ui/header.rs:131",
+    "definedIn": "src/ui/header.rs:136",
     "plural": false,
     "description": null
   },
   "SCAN_PROGRESS_DISCOVERING": {
     "context": "header.rs",
-    "definedIn": "src/ui/header.rs:114",
+    "definedIn": "src/ui/header.rs:116",
     "plural": false,
     "description": null
   },
   "SCAN_PROGRESS_SCANNING": {
     "context": "header.rs",
-    "definedIn": "src/ui/header.rs:122",
+    "definedIn": "src/ui/header.rs:124",
     "plural": false,
     "description": null
   },

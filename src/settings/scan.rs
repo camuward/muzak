@@ -4,16 +4,28 @@ use camino::Utf8PathBuf;
 use serde::{Deserialize, Serialize};
 use tracing::{error, warn};
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum MissingFolderPolicy {
+    #[default]
+    Ask,
+    KeepInLibrary,
+    DeleteFromLibrary,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct ScanSettings {
     #[serde(default = "retrieve_default_paths")]
     pub paths: Vec<Utf8PathBuf>,
+    #[serde(default)]
+    pub missing_folder_policy: MissingFolderPolicy,
 }
 
 impl Default for ScanSettings {
     fn default() -> Self {
         Self {
             paths: retrieve_default_paths(),
+            missing_folder_policy: MissingFolderPolicy::default(),
         }
     }
 }

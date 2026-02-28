@@ -26,22 +26,29 @@ use crate::{
     library::scan::{
         database::{AlbumCacheKey, AlbumPathCacheKey, update_metadata},
         decode::{FileInformation, build_provider_table, read_metadata_for_path},
-        discover::{cleanup, cleanup_removed_directories, discover},
+        discover::{cleanup_removed_directories, cleanup_with_exclusions, discover},
         record::{SCAN_VERSION, ScanRecord, load_scan_record, write_scan_record},
     },
-    settings::scan::ScanSettings,
+    settings::scan::{MissingFolderPolicy, ScanSettings},
     ui::{app::get_dirs, models::Models},
 };
 
 /// Maximum number of items to accumulate before flushing a DB transaction.
 const BATCH_SIZE: usize = 50;
 
-#[derive(Debug, PartialEq, Clone, Copy)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum ScanEvent {
     Cleaning,
+    WaitingForMissingFolderDecision { paths: Vec<Utf8PathBuf> },
     ScanProgress { current: u64, total: u64 },
     ScanCompleteWatching,
     ScanCompleteIdle,
+}
+
+#[derive(Debug, PartialEq, Clone, Copy)]
+pub enum MissingFolderAction {
+    KeepInLibrary,
+    DeleteFromLibrary,
 }
 
 #[derive(Debug, Clone)]
@@ -52,6 +59,7 @@ enum ScanCommand {
     /// database schema has been changed, or a bug has been fixed with in the scanning proccess,
     /// and is usually triggered by the scan version changing (see [SCAN_VERSION]).
     ForceScan,
+    ResolveMissingFolders(MissingFolderAction),
     UpdateSettings(ScanSettings),
     Stop,
 }
@@ -93,6 +101,12 @@ impl ScanInterface {
             .expect("could not send scan settings update command");
     }
 
+    pub fn resolve_missing_folders(&self, action: MissingFolderAction) {
+        self.cmd_tx
+            .blocking_send(ScanCommand::ResolveMissingFolders(action))
+            .expect("could not send missing folder resolution");
+    }
+
     pub fn start_broadcast(&mut self, cx: &mut App) {
         let mut events_rx = None;
         std::mem::swap(&mut self.events_rx, &mut events_rx);
@@ -117,6 +131,44 @@ impl ScanInterface {
 }
 
 impl Global for ScanInterface {}
+
+async fn resolve_missing_folder_action(
+    command_rx: &mut Receiver<ScanCommand>,
+    event_tx: &UnboundedSender<ScanEvent>,
+    scan_settings: &mut ScanSettings,
+    missing_paths: Vec<Utf8PathBuf>,
+) -> MissingFolderAction {
+    match scan_settings.missing_folder_policy {
+        MissingFolderPolicy::KeepInLibrary => MissingFolderAction::KeepInLibrary,
+        MissingFolderPolicy::DeleteFromLibrary => MissingFolderAction::DeleteFromLibrary,
+        MissingFolderPolicy::Ask => {
+            let _ = event_tx.send(ScanEvent::WaitingForMissingFolderDecision {
+                paths: missing_paths,
+            });
+
+            loop {
+                match command_rx.recv().await {
+                    Some(ScanCommand::ResolveMissingFolders(action)) => break action,
+                    Some(ScanCommand::UpdateSettings(s)) => {
+                        *scan_settings = s;
+                        match scan_settings.missing_folder_policy {
+                            MissingFolderPolicy::Ask => {}
+                            MissingFolderPolicy::KeepInLibrary => {
+                                break MissingFolderAction::KeepInLibrary;
+                            }
+                            MissingFolderPolicy::DeleteFromLibrary => {
+                                break MissingFolderAction::DeleteFromLibrary;
+                            }
+                        }
+                    }
+                    Some(ScanCommand::Stop) => break MissingFolderAction::KeepInLibrary,
+                    Some(ScanCommand::Scan) | Some(ScanCommand::ForceScan) => {}
+                    None => break MissingFolderAction::KeepInLibrary,
+                }
+            }
+        }
+    }
+}
 
 async fn run_scanner(
     pool: SqlitePool,
@@ -189,6 +241,7 @@ async fn run_scanner(
             match command_rx.recv().await {
                 Some(ScanCommand::Scan) => break false,
                 Some(ScanCommand::ForceScan) => break true,
+                Some(ScanCommand::ResolveMissingFolders(_)) => {}
                 Some(ScanCommand::UpdateSettings(s)) => {
                     scan_settings = s;
                 }
@@ -214,10 +267,34 @@ async fn run_scanner(
 
         let time_start = std::time::Instant::now();
 
+        let (available_paths, missing_paths): (Vec<Utf8PathBuf>, Vec<Utf8PathBuf>) = scan_settings
+            .paths
+            .iter()
+            .cloned()
+            .partition(|path| path.exists());
+
+        let missing_action = if missing_paths.is_empty() {
+            MissingFolderAction::DeleteFromLibrary
+        } else {
+            resolve_missing_folder_action(
+                &mut command_rx,
+                &event_tx,
+                &mut scan_settings,
+                missing_paths.clone(),
+            )
+            .await
+        };
+
+        let excluded_missing_roots: &[_] = if missing_action == MissingFolderAction::KeepInLibrary {
+            &missing_paths
+        } else {
+            &[]
+        };
+
         let _ = event_tx.send(ScanEvent::Cleaning);
 
         cleanup_removed_directories(&pool, &mut scan_record, &scan_settings.paths).await;
-        cleanup(&pool, &mut scan_record).await;
+        cleanup_with_exclusions(&pool, &mut scan_record, &excluded_missing_roots).await;
 
         scan_record.directories = scan_settings.paths.clone();
 
@@ -247,7 +324,8 @@ async fn run_scanner(
             tokio::sync::mpsc::channel::<(Utf8PathBuf, SystemTime)>(num_workers * 8);
 
         // Discovery
-        let settings_for_discover = scan_settings.clone();
+        let mut settings_for_discover = scan_settings.clone();
+        settings_for_discover.paths = available_paths;
         let scan_record_for_discover = scan_record_shared.clone();
         let discover_handle = spawn_blocking(move || {
             discover(settings_for_discover, scan_record_for_discover, path_tx)

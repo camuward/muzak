@@ -99,7 +99,9 @@ impl Render for ScanStatus {
                         ScanEvent::ScanCompleteIdle | ScanEvent::ScanCompleteWatching => {
                             FOLDER_CHECK
                         }
-                        _ => FOLDER_SEARCH,
+                        ScanEvent::Cleaning
+                        | ScanEvent::ScanProgress { .. }
+                        | ScanEvent::WaitingForMissingFolderDecision { .. } => FOLDER_SEARCH,
                     })
                     .size(px(14.0)),
                 ),
@@ -127,6 +129,9 @@ impl Render for ScanStatus {
                     }
                 }
                 ScanEvent::Cleaning => SharedString::from(""),
+                ScanEvent::WaitingForMissingFolderDecision { .. } => {
+                    tr!("SCANNING_MISSING_DIALOG_TITLE").into()
+                }
                 ScanEvent::ScanCompleteWatching => {
                     tr!("SCAN_COMPLETE_WATCHING", "Watching for updates").into()
                 }
