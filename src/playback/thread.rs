@@ -209,15 +209,15 @@ impl PlaybackThread {
 
         // If stopped and queue is not empty, start playing from the beginning
         if current_state == PlaybackState::Stopped
-            && let Some(first) = self.queue.first()
+            && let Some((first, index)) = self.queue.first_with_index()
         {
             let path = first.get_path().clone();
 
             if let Err(err) = self.open(&path) {
                 error!(path = %path.display(), ?err, "Unable to open file: {err}");
             }
-            self.queue.set_position(0);
-            self.send_event(PlaybackEvent::QueuePositionChanged(0));
+            self.queue.set_position(index);
+            self.send_event(PlaybackEvent::QueuePositionChanged(index));
         }
     }
 
@@ -332,6 +332,11 @@ impl PlaybackThread {
         let index = self.queue.queue_item(item.clone());
 
         if self.state() == PlaybackState::Stopped {
+            if !item.get_path().exists() {
+                self.send_event(PlaybackEvent::QueueUpdated);
+                return;
+            }
+
             let path = item.get_path();
 
             if let Err(err) = self.open(path) {
@@ -353,20 +358,25 @@ impl PlaybackThread {
 
         info!("Adding {} files to queue", items.len());
 
-        let first = items.first().cloned();
+        let first = items
+            .iter()
+            .enumerate()
+            .find(|(_, item)| item.get_path().exists())
+            .map(|(idx, item)| (idx, item.clone()));
         let first_index = self.queue.queue_items(items);
 
         // If stopped, start playing the first item
         if self.state() == PlaybackState::Stopped
-            && let Some(first) = first
+            && let Some((relative_idx, first)) = first
         {
             let path = first.get_path();
 
             if let Err(err) = self.open(path) {
                 error!(path = %path.display(), ?err, "Unable to open file: {err}");
             }
-            self.queue.set_position(first_index);
-            self.send_event(PlaybackEvent::QueuePositionChanged(first_index));
+            let position = first_index + relative_idx;
+            self.queue.set_position(position);
+            self.send_event(PlaybackEvent::QueuePositionChanged(position));
         }
 
         self.send_event(PlaybackEvent::QueueUpdated);
@@ -427,6 +437,11 @@ impl PlaybackThread {
             InsertResult::Inserted { first_index } => {
                 // If stopped, start playing the inserted item
                 if self.state() == PlaybackState::Stopped {
+                    if !item.get_path().exists() {
+                        self.send_event(PlaybackEvent::QueueUpdated);
+                        return;
+                    }
+
                     let path = item.get_path();
 
                     if let Err(err) = self.open(path) {
@@ -444,6 +459,11 @@ impl PlaybackThread {
 
                 // If stopped, start playing the inserted item
                 if self.state() == PlaybackState::Stopped {
+                    if !item.get_path().exists() {
+                        self.send_event(PlaybackEvent::QueueUpdated);
+                        return;
+                    }
+
                     let path = item.get_path();
 
                     if let Err(err) = self.open(path) {
@@ -472,21 +492,26 @@ impl PlaybackThread {
             position
         );
 
-        let first = items.first().cloned();
+        let first = items
+            .iter()
+            .enumerate()
+            .find(|(_, item)| item.get_path().exists())
+            .map(|(idx, item)| (idx, item.clone()));
 
         match self.queue.insert_items(position, items) {
             InsertResult::Inserted { first_index } => {
                 // If stopped, start playing the first inserted item
                 if self.state() == PlaybackState::Stopped
-                    && let Some(first) = first
+                    && let Some((relative_idx, first)) = first
                 {
                     let path = first.get_path();
 
                     if let Err(err) = self.open(path) {
                         error!(path = %path.display(), ?err, "Unable to open file: {err}");
                     }
-                    self.queue.set_position(first_index);
-                    self.send_event(PlaybackEvent::QueuePositionChanged(first_index));
+                    let position = first_index + relative_idx;
+                    self.queue.set_position(position);
+                    self.send_event(PlaybackEvent::QueuePositionChanged(position));
                 }
             }
             InsertResult::InsertedMovedCurrent {
@@ -497,15 +522,16 @@ impl PlaybackThread {
 
                 // If stopped, start playing the first inserted item
                 if self.state() == PlaybackState::Stopped
-                    && let Some(first) = first
+                    && let Some((relative_idx, first)) = first
                 {
                     let path = first.get_path();
 
                     if let Err(err) = self.open(path) {
                         error!(path = %path.display(), ?err, "Unable to open file: {err}");
                     }
-                    self.queue.set_position(first_index);
-                    self.send_event(PlaybackEvent::QueuePositionChanged(first_index));
+                    let position = first_index + relative_idx;
+                    self.queue.set_position(position);
+                    self.send_event(PlaybackEvent::QueuePositionChanged(position));
                 }
             }
             InsertResult::Unchanged => {}
@@ -576,9 +602,10 @@ impl PlaybackThread {
 
         match self.queue.replace_queue(paths) {
             ReplaceResult::Replaced { first_item } => {
-                if first_item.is_some() {
-                    // Jump to position 0 to start playing
-                    self.jump(0);
+                if first_item.is_some()
+                    && let Some((_, first_index)) = self.queue.first_with_index()
+                {
+                    self.jump(first_index);
                 }
             }
             ReplaceResult::Empty => {

@@ -6,6 +6,7 @@ use crate::{
     },
     settings::storage::DEFAULT_QUEUE_WIDTH,
     ui::{
+        availability::is_track_path_available,
         components::{
             context::context,
             drag_drop::{
@@ -119,6 +120,10 @@ impl Render for QueueItem {
         let ui_data = data.and_then(|item| item.get_data(cx).read(cx).clone());
         let theme = cx.global::<Theme>().clone();
         let show_add_to = self.show_add_to.clone();
+        let is_available = self
+            .item
+            .as_ref()
+            .is_some_and(|queue_item| is_track_path_available(queue_item.get_path()));
 
         if let Some(item) = ui_data.as_ref() {
             let is_current = self.current == self.idx;
@@ -144,7 +149,8 @@ impl Render for QueueItem {
                         .gap(px(11.0))
                         .h(px(QUEUE_ITEM_HEIGHT))
                         .p(px(11.0))
-                        .cursor_pointer()
+                        .when(is_available, |div| div.cursor_pointer())
+                        .when(!is_available, |div| div.cursor_default().opacity(0.5))
                         .relative()
                         // Default bottom border - always present
                         .border_b(px(1.0))
@@ -153,18 +159,22 @@ impl Render for QueueItem {
                         .when(is_current && !item_state.is_being_dragged, |div| {
                             div.bg(theme.queue_item_current)
                         })
-                        .on_click(move |_, _, cx| {
-                            cx.global::<PlaybackInterface>().jump(idx);
+                        .when(is_available, |div| {
+                            div.on_click(move |_, _, cx| {
+                                cx.global::<PlaybackInterface>().jump(idx);
+                            })
                         })
-                        .when(!item_state.is_being_dragged, |div| {
+                        .when(is_available && !item_state.is_being_dragged, |div| {
                             div.hover(|div| div.bg(theme.queue_item_hover))
                                 .active(|div| div.bg(theme.queue_item_active))
                         })
-                        .on_drag(DragData::new(idx, QUEUE_LIST_ID), move |_, _, _, cx| {
-                            DragPreview::new(cx, track_name.clone())
-                        })
-                        .drag_over::<DragData>(move |style, _, _, _| {
-                            style.bg(gpui::rgba(0x88888822))
+                        .when(is_available, |div| {
+                            div.on_drag(DragData::new(idx, QUEUE_LIST_ID), move |_, _, _, cx| {
+                                DragPreview::new(cx, track_name.clone())
+                            })
+                            .drag_over::<DragData>(
+                                move |style, _, _, _| style.bg(gpui::rgba(0x88888822)),
+                            )
                         })
                         .when_some(self.add_to.clone(), |this, that| this.child(that))
                         .child(DropIndicator::with_state(
@@ -219,36 +229,42 @@ impl Render for QueueItem {
                 )
                 .child(
                     menu()
-                        .item(menu_item(
-                            "go_to_album",
-                            Some(DISC),
-                            tr!("GO_TO_ALBUM", "Go to album"),
-                            move |_, _, cx| {
-                                if let Some(album_id) = album_id {
-                                    let switcher = cx.global::<Models>().switcher_model.clone();
-                                    switcher.update(cx, |_, cx| {
-                                        cx.emit(ViewSwitchMessage::Release(album_id));
-                                    })
-                                }
-                            },
-                        ))
-                        .item(menu_item(
-                            "go_to_artist",
-                            Some(USERS),
-                            tr!("GO_TO_ARTIST", "Go to artist"),
-                            move |_, _, cx| {
-                                if let Some(album_id) = album_id {
-                                    let Ok(artist_id) = cx.artist_id_for_album(album_id) else {
-                                        return;
-                                    };
+                        .item(
+                            menu_item(
+                                "go_to_album",
+                                Some(DISC),
+                                tr!("GO_TO_ALBUM", "Go to album"),
+                                move |_, _, cx| {
+                                    if let Some(album_id) = album_id {
+                                        let switcher = cx.global::<Models>().switcher_model.clone();
+                                        switcher.update(cx, |_, cx| {
+                                            cx.emit(ViewSwitchMessage::Release(album_id));
+                                        })
+                                    }
+                                },
+                            )
+                            .disabled(!is_available),
+                        )
+                        .item(
+                            menu_item(
+                                "go_to_artist",
+                                Some(USERS),
+                                tr!("GO_TO_ARTIST", "Go to artist"),
+                                move |_, _, cx| {
+                                    if let Some(album_id) = album_id {
+                                        let Ok(artist_id) = cx.artist_id_for_album(album_id) else {
+                                            return;
+                                        };
 
-                                    let switcher = cx.global::<Models>().switcher_model.clone();
-                                    switcher.update(cx, |_, cx| {
-                                        cx.emit(ViewSwitchMessage::Artist(artist_id));
-                                    })
-                                }
-                            },
-                        ))
+                                        let switcher = cx.global::<Models>().switcher_model.clone();
+                                        switcher.update(cx, |_, cx| {
+                                            cx.emit(ViewSwitchMessage::Artist(artist_id));
+                                        })
+                                    }
+                                },
+                            )
+                            .disabled(!is_available),
+                        )
                         .when(self.add_to.is_some(), |menu| menu.item(menu_separator()))
                         .when(self.add_to.is_some(), |menu| {
                             menu.item(menu_item(

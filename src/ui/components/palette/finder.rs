@@ -251,7 +251,9 @@ where
     }
 
     fn prev_enabled_index(&self, current: usize, cx: &App) -> Option<usize> {
-        (0..current).rev().find(|idx| self.index_is_enabled(*idx, cx))
+        (0..current)
+            .rev()
+            .find(|idx| self.index_is_enabled(*idx, cx))
     }
 
     fn first_enabled_index(&self, cx: &App) -> Option<usize> {

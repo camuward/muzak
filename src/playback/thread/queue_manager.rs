@@ -114,6 +114,28 @@ pub struct QueueManager {
 }
 
 impl QueueManager {
+    fn item_is_playable(item: &QueueItemData) -> bool {
+        item.get_path().exists()
+    }
+
+    fn first_playable_index(queue: &[QueueItemData]) -> Option<usize> {
+        queue.iter().position(Self::item_is_playable)
+    }
+
+    fn last_playable_index(queue: &[QueueItemData]) -> Option<usize> {
+        queue.iter().rposition(Self::item_is_playable)
+    }
+
+    fn next_playable_from(queue: &[QueueItemData], start: usize) -> Option<usize> {
+        (start..queue.len()).find(|idx| Self::item_is_playable(&queue[*idx]))
+    }
+
+    fn prev_playable_before(queue: &[QueueItemData], end_exclusive: usize) -> Option<usize> {
+        (0..end_exclusive)
+            .rev()
+            .find(|idx| Self::item_is_playable(&queue[*idx]))
+    }
+
     pub fn new(
         queue: Arc<RwLock<Vec<QueueItemData>>>,
         playback_settings: PlaybackSettings,
@@ -156,22 +178,24 @@ impl QueueManager {
 
     /// Get the first item in the queue.
     pub fn first(&self) -> Option<QueueItemData> {
+        self.first_with_index().map(|(item, _)| item)
+    }
+
+    /// Get the first playable item in the queue along with its index.
+    pub fn first_with_index(&self) -> Option<(QueueItemData, usize)> {
         self.queue
             .read()
             .expect("poisoned queue lock")
-            .first()
-            .cloned()
+            .iter()
+            .enumerate()
+            .find(|(_, item)| Self::item_is_playable(item))
+            .map(|(idx, item)| (item.clone(), idx))
     }
 
     /// Get the last item in the queue along with its index, if the queue is non-empty.
     pub fn last_with_index(&self) -> Option<(QueueItemData, usize)> {
         let queue = self.queue.read().expect("poisoned queue lock");
-        if queue.is_empty() {
-            None
-        } else {
-            let index = queue.len() - 1;
-            Some((queue[index].clone(), index))
-        }
+        Self::last_playable_index(&queue).map(|index| (queue[index].clone(), index))
     }
 
     /// Set the queue position directly (used after opening a track).
@@ -207,15 +231,15 @@ impl QueueManager {
         if self.repeat == RepeatState::RepeatingOne
             && !user_initiated
             && let Some(path) = queue.get(self.queue_next.saturating_sub(1))
+            && Self::item_is_playable(path)
         {
             return QueueNavigationResult::Unchanged {
                 path: path.get_path().clone(),
             };
         }
 
-        if self.queue_next < queue.len() {
-            let index = self.queue_next;
-            self.queue_next += 1;
+        if let Some(index) = Self::next_playable_from(&queue, self.queue_next) {
+            self.queue_next = index + 1;
             QueueNavigationResult::Changed {
                 index,
                 path: queue[index].get_path().clone(),
@@ -225,19 +249,19 @@ impl QueueManager {
             if self.shuffle {
                 queue.shuffle(&mut rng());
             }
-            self.queue_next = 1;
-            if queue.is_empty() {
-                QueueNavigationResult::EndOfQueue
-            } else {
+            if let Some(index) = Self::first_playable_index(&queue) {
+                self.queue_next = index + 1;
                 QueueNavigationResult::Changed {
-                    index: 0,
-                    path: queue[0].get_path().clone(),
+                    index,
+                    path: queue[index].get_path().clone(),
                     reshuffled: if self.shuffle {
                         Reshuffled::Reshuffled
                     } else {
                         Reshuffled::NotReshuffled
                     },
                 }
+            } else {
+                QueueNavigationResult::EndOfQueue
             }
         } else {
             QueueNavigationResult::EndOfQueue
@@ -248,21 +272,25 @@ impl QueueManager {
     pub fn previous(&mut self) -> QueueNavigationResult {
         let mut queue = self.queue.write().expect("poisoned queue lock");
 
-        if self.queue_next > 1 {
-            self.queue_next -= 1;
-            let index = self.queue_next - 1;
+        if self.queue_next > 1
+            && let Some(index) = Self::prev_playable_before(&queue, self.queue_next - 1)
+        {
+            self.queue_next = index + 1;
             QueueNavigationResult::Changed {
                 index,
                 path: queue[index].get_path().clone(),
                 reshuffled: Reshuffled::NotReshuffled,
             }
-        } else if self.queue_next == 1 && self.repeat == RepeatState::Repeating && !queue.is_empty()
-        {
-            if self.shuffle {
-                queue.shuffle(&mut rng());
+        } else if self.repeat == RepeatState::Repeating
+            && !queue.is_empty()
+            && let Some(index) = {
+                if self.shuffle {
+                    queue.shuffle(&mut rng());
+                }
+                Self::last_playable_index(&queue)
             }
-            self.queue_next = queue.len();
-            let index = self.queue_next - 1;
+        {
+            self.queue_next = index + 1;
             QueueNavigationResult::Changed {
                 index,
                 path: queue[index].get_path().clone(),
@@ -281,7 +309,7 @@ impl QueueManager {
     pub fn jump(&mut self, index: usize) -> JumpResult {
         let queue = self.queue.read().expect("poisoned queue lock");
 
-        if index < queue.len() {
+        if index < queue.len() && Self::item_is_playable(&queue[index]) {
             let path = queue[index].get_path().clone();
             drop(queue);
             self.queue_next = index + 1;
@@ -448,7 +476,9 @@ impl QueueManager {
         let current = self.queue_next.saturating_sub(1);
 
         let res = if index == current {
-            let new_path = queue.get(current).map(|v| v.get_path().clone());
+            let new_path = Self::next_playable_from(&queue, current)
+                .and_then(|idx| queue.get(idx))
+                .map(|v| v.get_path().clone());
             DequeueResult::RemovedCurrent { new_path }
         } else if index < current {
             self.queue_next -= 1;
@@ -527,7 +557,7 @@ impl QueueManager {
             *queue = items.clone();
         }
 
-        let first_item = queue.first().cloned();
+        let first_item = Self::first_playable_index(&queue).map(|idx| queue[idx].clone());
 
         drop(queue);
         self.send_queuestorage_event(QueueStorageEvent::Replace { items });
