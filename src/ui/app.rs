@@ -317,12 +317,15 @@ pub fn run() -> anyhow::Result<()> {
                             let sidebar_width = cx.global::<Models>().sidebar_width.clone();
                             let queue_width = cx.global::<Models>().queue_width.clone();
                             let table_settings = cx.global::<Models>().table_settings.clone();
+                            let liked_tracks_sort_method =
+                                cx.global::<Models>().liked_tracks_sort_method.clone();
                             move |_, cx| {
                                 let current_track = current_track.read(cx).clone();
                                 let volume = *volume.read(cx);
                                 let sidebar_width: f32 = (*sidebar_width.read(cx)).into();
                                 let queue_width: f32 = (*queue_width.read(cx)).into();
                                 let table_settings = table_settings.read(cx).clone();
+                                let liked_tracks_sort_method = *liked_tracks_sort_method.read(cx);
                                 let storage = storage.clone();
                                 cx.background_executor().spawn(async move {
                                     storage.save(&StorageData {
@@ -331,6 +334,7 @@ pub fn run() -> anyhow::Result<()> {
                                         sidebar_width,
                                         queue_width,
                                         table_settings,
+                                        liked_tracks_sort_method,
                                     });
                                 })
                             }

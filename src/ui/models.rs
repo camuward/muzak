@@ -12,7 +12,7 @@ use tokio::sync::Mutex;
 use tracing::{debug, error, warn};
 
 use crate::{
-    library::scan::ScanEvent,
+    library::{db::LikedTrackSortMethod, scan::ScanEvent},
     media::metadata::Metadata,
     playback::{
         events::RepeatState,
@@ -61,6 +61,7 @@ pub struct Models {
     pub sidebar_width: Entity<Pixels>,
     pub queue_width: Entity<Pixels>,
     pub table_settings: Entity<std::collections::HashMap<String, TableSettings>>,
+    pub liked_tracks_sort_method: Entity<LikedTrackSortMethod>,
 }
 
 impl Global for Models {}
@@ -251,6 +252,7 @@ pub fn build_models(cx: &mut App, queue: Queue, storage_data: &StorageData) {
     });
 
     let table_settings = cx.new(|_| storage_data.table_settings.clone());
+    let liked_tracks_sort_method = cx.new(|_| storage_data.liked_tracks_sort_method);
 
     cx.set_global(Models {
         metadata,
@@ -266,6 +268,7 @@ pub fn build_models(cx: &mut App, queue: Queue, storage_data: &StorageData) {
         sidebar_width,
         queue_width,
         table_settings,
+        liked_tracks_sort_method,
     });
 
     let position: Entity<u64> = cx.new(|_| 0);

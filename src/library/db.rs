@@ -1,6 +1,7 @@
 use std::{path::Path, sync::Arc};
 
 use gpui::App;
+use serde::{Deserialize, Serialize};
 use sqlx::{
     SqlitePool,
     sqlite::{SqliteConnectOptions, SqliteJournalMode, SqliteSynchronous},
@@ -97,11 +98,14 @@ pub enum ArtistSortMethod {
     TracksDesc,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub enum LikedTrackSortMethod {
     TitleAsc,
+    TitleDesc,
     ReleaseOrder,
+    ReleaseOrderDesc,
     RecentlyAdded,
+    RecentlyAddedAsc,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -328,13 +332,22 @@ pub async fn get_liked_tracks_by_artist(
 ) -> sqlx::Result<Arc<Vec<Track>>> {
     let query = match sort_method {
         LikedTrackSortMethod::TitleAsc => {
-            include_str!("../../queries/library/find_liked_tracks_by_artist_title.sql")
+            include_str!("../../queries/library/find_liked_tracks_by_artist_title_asc.sql")
+        }
+        LikedTrackSortMethod::TitleDesc => {
+            include_str!("../../queries/library/find_liked_tracks_by_artist_title_desc.sql")
         }
         LikedTrackSortMethod::ReleaseOrder => {
-            include_str!("../../queries/library/find_liked_tracks_by_artist_release.sql")
+            include_str!("../../queries/library/find_liked_tracks_by_artist_release_asc.sql")
+        }
+        LikedTrackSortMethod::ReleaseOrderDesc => {
+            include_str!("../../queries/library/find_liked_tracks_by_artist_release_desc.sql")
         }
         LikedTrackSortMethod::RecentlyAdded => {
-            include_str!("../../queries/library/find_liked_tracks_by_artist_recent.sql")
+            include_str!("../../queries/library/find_liked_tracks_by_artist_recent_desc.sql")
+        }
+        LikedTrackSortMethod::RecentlyAddedAsc => {
+            include_str!("../../queries/library/find_liked_tracks_by_artist_recent_asc.sql")
         }
     };
 

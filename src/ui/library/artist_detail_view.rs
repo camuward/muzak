@@ -21,7 +21,7 @@ use crate::{
         components::{
             button::{ButtonIntent, ButtonSize, button},
             dropdown::{DropdownOption, DropdownState, dropdown},
-            icons::{CIRCLE_PLUS, PAUSE, PLAY, SHUFFLE, SORT, icon},
+            icons::{CIRCLE_PLUS, PAUSE, PLAY, SHUFFLE, SORT_ASCENDING, SORT_DESCENDING, icon},
             scrollbar::{RightPad, floating_scrollbar},
             table::{
                 grid_item::GridItem,
@@ -45,6 +45,7 @@ use super::ViewSwitchMessage;
 type GridHandler = dyn Fn(&mut App, &(u32, String)) + 'static;
 
 pub struct ArtistDetailView {
+    artist_id: i64,
     artist_name: Option<DBString>,
     album_ids: Vec<(u32, String)>,
     liked_track_items: Vec<Entity<TrackItem>>,
@@ -74,8 +75,10 @@ impl ArtistDetailView {
                 .get_all_tracks_by_artist(artist_id)
                 .unwrap_or_else(|_| Arc::new(Vec::new()));
 
+            let liked_sort = *cx.global::<Models>().liked_tracks_sort_method.read(cx);
+
             let liked_tracks = cx
-                .get_liked_tracks_by_artist(artist_id, LikedTrackSortMethod::RecentlyAdded)
+                .get_liked_tracks_by_artist(artist_id, liked_sort)
                 .unwrap_or_else(|_| Arc::new(Vec::new()));
 
             let liked_track_items: Vec<Entity<TrackItem>> = liked_tracks
@@ -102,24 +105,7 @@ impl ArtistDetailView {
                         .get_liked_tracks_by_artist(artist_id, this.liked_sort)
                         .unwrap_or_else(|_| Arc::new(Vec::new()));
 
-                    this.liked_tracks = liked_tracks.clone();
-                    this.liked_track_items = liked_tracks
-                        .iter()
-                        .map(|track| {
-                            TrackItem::new(
-                                cx,
-                                track.clone(),
-                                false,
-                                ArtistNameVisibility::OnlyIfDifferent(this.artist_name.clone()),
-                                TrackItemLeftField::Art,
-                                None,
-                                false,
-                                None,
-                            )
-                        })
-                        .collect();
-
-                    cx.notify();
+                    this.set_liked_tracks(liked_tracks, cx);
                 }
             })
             .detach();
@@ -137,9 +123,15 @@ impl ArtistDetailView {
             ];
 
             let focus_handle = cx.focus_handle();
-            let liked_sort_dropdown = dropdown(cx, dropdown_options, 0, focus_handle);
+            let liked_sort_dropdown = dropdown(
+                cx,
+                dropdown_options,
+                Self::dropdown_index_from_method(liked_sort),
+                focus_handle,
+            );
 
             ArtistDetailView {
+                artist_id,
                 artist_name,
                 album_ids,
                 liked_track_items,
@@ -149,7 +141,7 @@ impl ArtistDetailView {
                 grid_views,
                 grid_render_counter,
                 nav_model,
-                liked_sort: LikedTrackSortMethod::RecentlyAdded,
+                liked_sort,
                 liked_sort_dropdown,
             }
         });
@@ -168,7 +160,7 @@ impl ArtistDetailView {
 
                     if let Some(view) = weak_view.upgrade() {
                         view.update(cx, |this: &mut ArtistDetailView, cx: &mut Context<ArtistDetailView>| {
-                            this.update_liked_sort(sort_method, artist_id, cx);
+                            this.update_liked_sort(sort_method, cx);
                         });
                     }
                 });
@@ -178,24 +170,28 @@ impl ArtistDetailView {
         view
     }
 
-    pub fn update_liked_sort(
-        &mut self,
-        sort_method: LikedTrackSortMethod,
-        artist_id: i64,
-        cx: &mut Context<Self>,
-    ) {
-        if self.liked_sort == sort_method {
+    pub fn update_liked_sort(&mut self, sort_method: LikedTrackSortMethod, cx: &mut Context<Self>) {
+        let current_descending = Self::is_descending(self.liked_sort);
+        let next_sort = Self::apply_direction(Self::base_sort(sort_method), current_descending);
+        if self.liked_sort == next_sort {
             return;
         }
 
-        self.liked_sort = sort_method;
+        self.liked_sort = next_sort;
+        self.sync_sort_with_model(cx);
 
         let liked_tracks = cx
-            .get_liked_tracks_by_artist(artist_id, self.liked_sort)
+            .get_liked_tracks_by_artist(self.artist_id, self.liked_sort)
             .unwrap_or_else(|_| Arc::new(Vec::new()));
 
-        self.liked_tracks = liked_tracks.clone();
-        self.liked_track_items = liked_tracks
+        self.set_liked_tracks(liked_tracks, cx);
+    }
+
+    fn set_liked_tracks(&mut self, liked_tracks: Arc<Vec<Track>>, cx: &mut Context<Self>) {
+        self.liked_tracks = liked_tracks;
+
+        self.liked_track_items = self
+            .liked_tracks
             .iter()
             .map(|track: &Track| {
                 TrackItem::new(
@@ -212,6 +208,91 @@ impl ArtistDetailView {
             .collect();
 
         cx.notify();
+    }
+
+    fn toggle_liked_sort_order(&mut self, cx: &mut Context<Self>) {
+        self.liked_sort = Self::toggled_sort(self.liked_sort);
+        self.sync_sort_with_model(cx);
+        let liked_tracks = cx
+            .get_liked_tracks_by_artist(self.artist_id, self.liked_sort)
+            .unwrap_or_else(|_| Arc::new(Vec::new()));
+        self.set_liked_tracks(liked_tracks, cx);
+    }
+
+    fn base_sort(sort_method: LikedTrackSortMethod) -> LikedTrackSortMethod {
+        match sort_method {
+            LikedTrackSortMethod::TitleAsc | LikedTrackSortMethod::TitleDesc => {
+                LikedTrackSortMethod::TitleAsc
+            }
+            LikedTrackSortMethod::ReleaseOrder | LikedTrackSortMethod::ReleaseOrderDesc => {
+                LikedTrackSortMethod::ReleaseOrder
+            }
+            LikedTrackSortMethod::RecentlyAdded | LikedTrackSortMethod::RecentlyAddedAsc => {
+                LikedTrackSortMethod::RecentlyAdded
+            }
+        }
+    }
+
+    fn apply_direction(
+        base_sort_method: LikedTrackSortMethod,
+        descending: bool,
+    ) -> LikedTrackSortMethod {
+        match base_sort_method {
+            LikedTrackSortMethod::TitleAsc | LikedTrackSortMethod::TitleDesc => {
+                if descending {
+                    LikedTrackSortMethod::TitleDesc
+                } else {
+                    LikedTrackSortMethod::TitleAsc
+                }
+            }
+            LikedTrackSortMethod::ReleaseOrder | LikedTrackSortMethod::ReleaseOrderDesc => {
+                if descending {
+                    LikedTrackSortMethod::ReleaseOrderDesc
+                } else {
+                    LikedTrackSortMethod::ReleaseOrder
+                }
+            }
+            LikedTrackSortMethod::RecentlyAdded | LikedTrackSortMethod::RecentlyAddedAsc => {
+                if descending {
+                    LikedTrackSortMethod::RecentlyAdded
+                } else {
+                    LikedTrackSortMethod::RecentlyAddedAsc
+                }
+            }
+        }
+    }
+
+    fn is_descending(sort_method: LikedTrackSortMethod) -> bool {
+        matches!(
+            sort_method,
+            LikedTrackSortMethod::TitleDesc
+                | LikedTrackSortMethod::ReleaseOrderDesc
+                | LikedTrackSortMethod::RecentlyAdded
+        )
+    }
+
+    fn toggled_sort(sort_method: LikedTrackSortMethod) -> LikedTrackSortMethod {
+        match sort_method {
+            LikedTrackSortMethod::TitleAsc => LikedTrackSortMethod::TitleDesc,
+            LikedTrackSortMethod::TitleDesc => LikedTrackSortMethod::TitleAsc,
+            LikedTrackSortMethod::ReleaseOrder => LikedTrackSortMethod::ReleaseOrderDesc,
+            LikedTrackSortMethod::ReleaseOrderDesc => LikedTrackSortMethod::ReleaseOrder,
+            LikedTrackSortMethod::RecentlyAdded => LikedTrackSortMethod::RecentlyAddedAsc,
+            LikedTrackSortMethod::RecentlyAddedAsc => LikedTrackSortMethod::RecentlyAdded,
+        }
+    }
+
+    fn dropdown_index_from_method(sort_method: LikedTrackSortMethod) -> usize {
+        match sort_method {
+            LikedTrackSortMethod::RecentlyAdded | LikedTrackSortMethod::RecentlyAddedAsc => 0,
+            LikedTrackSortMethod::TitleAsc | LikedTrackSortMethod::TitleDesc => 1,
+            LikedTrackSortMethod::ReleaseOrder | LikedTrackSortMethod::ReleaseOrderDesc => 2,
+        }
+    }
+
+    fn sync_sort_with_model(&self, cx: &mut Context<Self>) {
+        let liked_tracks_sort_method = cx.global::<Models>().liked_tracks_sort_method.clone();
+        liked_tracks_sort_method.update(cx, |value, _| *value = self.liked_sort);
     }
 }
 
@@ -437,9 +518,25 @@ impl Render for ArtistDetailView {
                                 div()
                                     .flex()
                                     .gap(px(12.0))
-                                    .items_center()
+                                    .items_stretch()
                                     .child(
-                                        icon(SORT).text_color(theme.text_secondary).size(px(20.0)),
+                                        button()
+                                            .id("artist-liked-sort-direction-button")
+                                            .size(ButtonSize::Large)
+                                            .on_click(cx.listener(
+                                                |this: &mut ArtistDetailView, _, _, cx| {
+                                                    this.toggle_liked_sort_order(cx);
+                                                },
+                                            ))
+                                            .child(
+                                                icon(if Self::is_descending(self.liked_sort) {
+                                                    SORT_DESCENDING
+                                                } else {
+                                                    SORT_ASCENDING
+                                                })
+                                                .text_color(theme.text_secondary)
+                                                .size(px(20.0)),
+                                            ),
                                     )
                                     .child(self.liked_sort_dropdown.clone()),
                             ),

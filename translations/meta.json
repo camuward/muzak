@@ -175,13 +175,13 @@
   },
   "ARTIST_ALBUMS": {
     "context": "artist_detail_view.rs",
-    "definedIn": "src/ui/library/artist_detail_view.rs:657",
+    "definedIn": "src/ui/library/artist_detail_view.rs:754",
     "plural": false,
     "description": null
   },
   "ARTIST_LIKED_TRACKS": {
     "context": "artist_detail_view.rs",
-    "definedIn": "src/ui/library/artist_detail_view.rs:281",
+    "definedIn": "src/ui/library/artist_detail_view.rs:362",
     "plural": false,
     "description": null
   },
@@ -703,19 +703,19 @@
   },
   "SORT_RECENTLY_ADDED": {
     "context": "artist_detail_view.rs",
-    "definedIn": "src/ui/library/artist_detail_view.rs:133",
+    "definedIn": "src/ui/library/artist_detail_view.rs:119",
     "plural": false,
     "description": null
   },
   "SORT_RELEASE_ORDER": {
     "context": "artist_detail_view.rs",
-    "definedIn": "src/ui/library/artist_detail_view.rs:136",
+    "definedIn": "src/ui/library/artist_detail_view.rs:122",
     "plural": false,
     "description": null
   },
   "SORT_TITLE": {
     "context": "artist_detail_view.rs",
-    "definedIn": "src/ui/library/artist_detail_view.rs:135",
+    "definedIn": "src/ui/library/artist_detail_view.rs:121",
     "plural": false,
     "description": null
   },

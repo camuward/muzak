@@ -3,7 +3,7 @@ use std::{collections::HashMap, fs, path::PathBuf};
 use gpui::{Pixels, px};
 use serde::{Deserialize, Serialize};
 
-use crate::ui::models::CurrentTrack;
+use crate::{library::db::LikedTrackSortMethod, ui::models::CurrentTrack};
 
 pub const DEFAULT_SIDEBAR_WIDTH: Pixels = px(225.0);
 pub const DEFAULT_QUEUE_WIDTH: Pixels = px(275.0);
@@ -26,6 +26,10 @@ fn default_table_settings() -> HashMap<String, TableSettings> {
 
 fn default_table_view_mode() -> TableViewModeSetting {
     TableViewModeSetting::List
+}
+
+fn default_liked_tracks_sort_method() -> LikedTrackSortMethod {
+    LikedTrackSortMethod::RecentlyAdded
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, Default, PartialEq, Eq)]
@@ -60,6 +64,8 @@ pub struct StorageData {
     pub queue_width: f32,
     #[serde(default = "default_table_settings")]
     pub table_settings: HashMap<String, TableSettings>,
+    #[serde(default = "default_liked_tracks_sort_method")]
+    pub liked_tracks_sort_method: LikedTrackSortMethod,
 }
 
 impl StorageData {
@@ -80,6 +86,7 @@ impl Default for StorageData {
             sidebar_width: f32::from(DEFAULT_SIDEBAR_WIDTH),
             queue_width: f32::from(DEFAULT_QUEUE_WIDTH),
             table_settings: HashMap::new(),
+            liked_tracks_sort_method: default_liked_tracks_sort_method(),
         }
     }
 }
