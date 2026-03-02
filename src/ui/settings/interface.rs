@@ -36,28 +36,22 @@ fn get_available_languages() -> Vec<LanguageOption> {
             display_name: tr!("LANGUAGE_SYSTEM_DEFAULT", "System Default").into(),
         },
         LanguageOption {
+            code: "el",
+            display_name: "Ελληνικά".into(),
+        },
+        LanguageOption {
             code: "en",
             display_name: "English".into(),
+        },
+        LanguageOption {
+            code: "sk",
+            display_name: "Slovenčina".into(),
         },
         LanguageOption {
             code: "vi",
             display_name: "Tiếng Việt".into(),
         },
-        LanguageOption {
-            code: "el",
-            display_name: "Ελληνικά".into(),
-        },
     ]
-}
-
-fn update_language(code: &str) {
-    if let Ok(mut manager) = I18N_MANAGER.write() {
-        if code.is_empty() {
-            manager.locale = Locale::current();
-        } else {
-            manager.locale = Locale::new_from_locale_identifier(code);
-        }
-    }
 }
 
 pub struct InterfaceSettings {
