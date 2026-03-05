@@ -1,4 +1,4 @@
-use cntp_i18n::{I18N_MANAGER, Locale, tr};
+use cntp_i18n::tr;
 use gpui::{
     App, AppContext, Context, Entity, IntoElement, ParentElement, Render, SharedString, Styled,
     Window, div, px,

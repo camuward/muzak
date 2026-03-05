@@ -52,7 +52,7 @@ fn retrieve_default_paths() -> Vec<Utf8PathBuf> {
         if let Some(user_directories) = directories::UserDirs::new() {
             if let Some(dir) = user_directories.audio_dir() {
                 if exists(dir).unwrap_or(false) {
-                    if let Some(utf8_path) = Utf8PathBuf::from_path_buf(dir.to_path_buf()).ok() {
+                    if let Ok(utf8_path) = Utf8PathBuf::from_path_buf(dir.to_path_buf()) {
                         return vec![utf8_path];
                     } else {
                         warn!(
@@ -66,7 +66,7 @@ fn retrieve_default_paths() -> Vec<Utf8PathBuf> {
                 let dir = user_directories.home_dir().join("Music");
                 warn!("Music directory couldn't be discovered normally, using $HOME/Music.");
                 if exists(&dir).unwrap_or(false) {
-                    if let Some(utf8_path) = Utf8PathBuf::from_path_buf(dir).ok() {
+                    if let Ok(utf8_path) = Utf8PathBuf::from_path_buf(dir) {
                         return vec![utf8_path];
                     } else {
                         warn!("$HOME/Music path is not UTF-8: nothing will be scanned by default.");

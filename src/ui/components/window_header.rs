@@ -9,7 +9,6 @@ use crate::ui::{
 
 #[derive(IntoElement)]
 pub struct WindowHeader {
-    title: Option<AnyElement>,
     left: SmallVec<[AnyElement; 2]>,
     right: SmallVec<[AnyElement; 2]>,
     div: Div,
@@ -19,17 +18,11 @@ pub struct WindowHeader {
 impl WindowHeader {
     pub fn new() -> Self {
         Self {
-            title: None,
             left: SmallVec::new(),
             right: SmallVec::new(),
             div: div(),
             main_window: false,
         }
-    }
-
-    pub fn title(mut self, title: impl IntoElement) -> Self {
-        self.title = Some(title.into_any_element());
-        self
     }
 
     pub fn left(mut self, element: impl IntoElement) -> Self {
@@ -66,9 +59,6 @@ impl RenderOnce for WindowHeader {
             .flex()
             .items_center()
             .gap(px(8.0))
-            .when_some(self.title, |this, title| {
-                this.child(div().id("window-title").child(title))
-            })
             .children(self.left);
 
         let right_container = div()

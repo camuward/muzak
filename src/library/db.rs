@@ -583,7 +583,6 @@ pub trait LibraryAccess {
     fn get_artist_by_id(&self, artist_id: i64) -> sqlx::Result<Arc<Artist>>;
     fn get_track_by_id(&self, track_id: i64) -> sqlx::Result<Arc<Track>>;
     fn list_albums_search(&self) -> sqlx::Result<Vec<(u32, String, String)>>;
-    fn add_playlist_item(&self, playlist_id: i64, track_id: i64) -> sqlx::Result<i64>;
     fn create_playlist(&self, name: &str) -> sqlx::Result<i64>;
     fn delete_playlist(&self, playlist_id: i64) -> sqlx::Result<()>;
     fn get_all_playlists(&self) -> sqlx::Result<Arc<Vec<PlaylistWithCount>>>;
@@ -591,7 +590,6 @@ pub trait LibraryAccess {
     fn get_playlist_track_files(&self, playlist_id: i64) -> sqlx::Result<Arc<Vec<String>>>;
     fn get_playlist_tracks(&self, playlist_id: i64) -> sqlx::Result<Arc<Vec<(i64, i64, i64)>>>;
     fn move_playlist_item(&self, item_id: i64, new_position: i64) -> sqlx::Result<()>;
-    fn remove_playlist_item(&self, item_id: i64) -> sqlx::Result<()>;
     fn get_playlist_item(&self, item_id: i64) -> sqlx::Result<PlaylistItem>;
     fn get_track_stats(&self) -> sqlx::Result<Arc<TrackStats>>;
     fn playlist_has_track(&self, playlist_id: i64, track_id: i64) -> sqlx::Result<Option<i64>>;
@@ -653,11 +651,6 @@ impl LibraryAccess for App {
         crate::RUNTIME.block_on(list_albums_search(&pool.0))
     }
 
-    fn add_playlist_item(&self, playlist_id: i64, track_id: i64) -> sqlx::Result<i64> {
-        let pool: &Pool = self.global();
-        crate::RUNTIME.block_on(add_playlist_item(&pool.0, playlist_id, track_id))
-    }
-
     fn create_playlist(&self, name: &str) -> sqlx::Result<i64> {
         let pool: &Pool = self.global();
         crate::RUNTIME.block_on(create_playlist(&pool.0, name))
@@ -691,11 +684,6 @@ impl LibraryAccess for App {
     fn move_playlist_item(&self, item_id: i64, new_position: i64) -> sqlx::Result<()> {
         let pool: &Pool = self.global();
         crate::RUNTIME.block_on(move_playlist_item(&pool.0, item_id, new_position))
-    }
-
-    fn remove_playlist_item(&self, item_id: i64) -> sqlx::Result<()> {
-        let pool: &Pool = self.global();
-        crate::RUNTIME.block_on(remove_playlist_item(&pool.0, item_id))
     }
 
     fn get_playlist_item(&self, item_id: i64) -> sqlx::Result<PlaylistItem> {

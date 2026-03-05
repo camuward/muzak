@@ -504,7 +504,7 @@ async fn unlike_track(
         Ok(Ok(())) => {}
         Ok(Err(err)) => {
             tracing::error!("could not unlike song: {err:?}");
-            let _ = entity.update(cx, |this, cx| {
+            entity.update(cx, |this, cx| {
                 this.is_liked = Some(item_id);
                 cx.notify();
             });
@@ -516,7 +516,7 @@ async fn unlike_track(
         }
     }
 
-    let _ = playlist_tracker.update(cx, |_, cx| {
+    playlist_tracker.update(cx, |_, cx| {
         cx.emit(PlaylistEvent::PlaylistUpdated(1));
     });
 }
@@ -542,12 +542,12 @@ async fn like_track(
         }
     };
 
-    let _ = entity.update(cx, |this, cx| {
+    entity.update(cx, |this, cx| {
         this.is_liked = Some(new_id);
         cx.notify();
     });
 
-    let _ = playlist_tracker.update(cx, |_, cx| {
+    playlist_tracker.update(cx, |_, cx| {
         cx.emit(PlaylistEvent::PlaylistUpdated(1));
     });
 }
@@ -575,7 +575,7 @@ fn remove_from_playlist(
             }
         }
 
-        let _ = playlist_tracker.update(cx, |_, cx| {
+        playlist_tracker.update(cx, |_, cx| {
             cx.emit(PlaylistEvent::PlaylistUpdated(playlist_id));
         });
     })

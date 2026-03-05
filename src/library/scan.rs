@@ -311,9 +311,8 @@ async fn run_scanner(
 
         let mut updated_playlists =
             cleanup_removed_directories(&pool, &mut scan_record, &scan_settings.paths).await;
-        updated_playlists.extend(
-            cleanup_with_exclusions(&pool, &mut scan_record, &excluded_missing_roots).await,
-        );
+        updated_playlists
+            .extend(cleanup_with_exclusions(&pool, &mut scan_record, excluded_missing_roots).await);
         if !updated_playlists.is_empty() {
             let _ = event_tx.send(ScanEvent::PlaylistsUpdated(
                 updated_playlists.into_iter().collect(),
@@ -473,7 +472,7 @@ async fn run_scanner(
                     }
 
                     let result = update_metadata(
-                        &mut *tx,
+                        &mut tx,
                         &metadata,
                         &path,
                         length,

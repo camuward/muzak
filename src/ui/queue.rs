@@ -15,7 +15,7 @@ use crate::{
                 calculate_drop_target, check_drag_cancelled, continue_edge_scroll,
                 get_edge_scroll_direction, handle_drag_move, handle_drop, perform_edge_scroll,
             },
-            icons::{CROSS, DISC, PLAYLIST_ADD, PLUS, SHUFFLE, TRASH, USERS, icon},
+            icons::{CROSS, DISC, PLAYLIST_ADD, SHUFFLE, TRASH, USERS, icon},
             menu::{menu, menu_item, menu_separator},
             nav_button::nav_button,
             resizable_sidebar::{ResizeSide, resizable_sidebar},

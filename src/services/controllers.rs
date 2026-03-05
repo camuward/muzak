@@ -130,12 +130,6 @@ impl ControllerBridge {
             .unwrap();
     }
 
-    pub fn jump(&self, index: usize) {
-        self.playback_thread
-            .send(PlaybackCommand::Jump(index))
-            .unwrap();
-    }
-
     pub fn seek(&self, position: f64) {
         self.playback_thread
             .send(PlaybackCommand::Seek(position))

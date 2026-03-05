@@ -176,11 +176,6 @@ impl QueueManager {
         self.queue.read().expect("poisoned queue lock").len()
     }
 
-    /// Get the first item in the queue.
-    pub fn first(&self) -> Option<QueueItemData> {
-        self.first_with_index().map(|(item, _)| item)
-    }
-
     /// Get the first playable item in the queue along with its index.
     pub fn first_with_index(&self) -> Option<(QueueItemData, usize)> {
         self.queue

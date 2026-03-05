@@ -195,13 +195,12 @@ pub fn run() -> anyhow::Result<()> {
             let storage_data = storage.load_or_default();
 
             let mut initial_position = None;
-            if let Some(track) = storage_data.current_track.as_ref() {
-                if let Some(pos) = initial_queue
+            if let Some(track) = storage_data.current_track.as_ref()
+                && let Some(pos) = initial_queue
                     .iter()
                     .position(|item| item.get_path() == track.get_path())
-                {
-                    initial_position = Some(pos);
-                }
+            {
+                initial_position = Some(pos);
             }
 
             let queue: Arc<RwLock<Vec<QueueItemData>>> = Arc::new(RwLock::new(initial_queue));

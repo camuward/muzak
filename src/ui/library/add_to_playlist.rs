@@ -122,7 +122,7 @@ impl AddToPlaylist {
                         }
                     }
 
-                    let _ = playlist_tracker.update(cx, |_, cx| {
+                    playlist_tracker.update(cx, |_, cx| {
                         cx.emit(PlaylistEvent::PlaylistUpdated(playlist_id));
                     });
                 })
@@ -182,7 +182,7 @@ impl AddToPlaylist {
                                 }
                             };
 
-                            let _ = playlist_tracker.update(cx, |_, cx| {
+                            playlist_tracker.update(cx, |_, cx| {
                                 cx.emit(PlaylistEvent::PlaylistUpdated(playlist_id));
                             });
                         })

@@ -254,9 +254,9 @@ pub async fn update_metadata(
 
     let album_image = if (metadata.track_current == Some(1)
         || metadata.track_current == Some(0)
-        || metadata.track_current == None)
+        || metadata.track_current.is_none())
         && (metadata.disc_current == Some(1)
-            || metadata.disc_current == None
+            || metadata.disc_current.is_none()
             || metadata.disc_current == Some(0))
     {
         image

@@ -132,7 +132,7 @@ impl LibrarySettings {
     fn remove_folder(settings: Entity<Settings>, path: &Utf8Path, cx: &mut App) {
         settings.update(cx, move |settings, cx| {
             let before_len = settings.scanning.paths.len();
-            settings.scanning.paths.retain(|p| p != &path);
+            settings.scanning.paths.retain(|p| p != path);
 
             if settings.scanning.paths.len() != before_len {
                 save_settings(cx, settings);
