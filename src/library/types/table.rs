@@ -188,11 +188,12 @@ impl TableData<AlbumColumn> for Album {
 
     fn get_context_menu(
         &self,
+        _window: &mut gpui::Window,
         _cx: &mut App,
         context: &Self::ContextMenuContext,
         _grid_context: GridContext,
-    ) -> Option<gpui::AnyElement> {
-        Some(album_menu_for_table(self, context))
+    ) -> Option<(gpui::AnyElement, Option<gpui::AnyElement>)> {
+        Some((album_menu_for_table(self, context), None))
     }
 
     fn supports_grid_view() -> bool {
@@ -451,14 +452,17 @@ impl TableData<TrackColumn> for Track {
 
     fn get_context_menu(
         &self,
-        _cx: &mut App,
+        window: &mut gpui::Window,
+        cx: &mut App,
         context: &Self::ContextMenuContext,
         _grid_context: GridContext,
-    ) -> Option<gpui::AnyElement> {
+    ) -> Option<(gpui::AnyElement, Option<gpui::AnyElement>)> {
         Some(track_menu_for_table(
             self,
             is_track_available(self),
             context,
+            window,
+            cx,
         ))
     }
 }

@@ -169,7 +169,16 @@ impl InfoSection {
 }
 
 impl Render for InfoSection {
-    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let add_to_state = self.current_library_track.as_ref().map(|track| {
+            crate::ui::library::context_menus::add_to_playlist_state(
+                "info-section-menu-state",
+                track.id,
+                window,
+                cx,
+            )
+        });
+
         let theme = cx.global::<Theme>();
         let state = self.playback_info.playback_state.read(cx);
         let content = div()
@@ -286,16 +295,22 @@ impl Render for InfoSection {
             );
 
         if self.current_track_path.is_some() || self.current_library_track.is_some() {
-            context("info-section-context")
-                .with(content)
+            let show_add_to = add_to_state.as_ref().map(|(s, _)| s.clone());
+            let add_to = add_to_state.map(|(_, a)| a);
+
+            div()
                 .child(
-                    div()
-                        .bg(theme.elevated_background)
-                        .child(InfoSectionContextMenu::new(
-                            self.current_track_path.clone(),
-                            self.current_library_track.clone(),
-                        )),
+                    context("info-section-context").with(content).child(
+                        div()
+                            .bg(theme.elevated_background)
+                            .child(InfoSectionContextMenu::new(
+                                self.current_track_path.clone(),
+                                self.current_library_track.clone(),
+                                show_add_to,
+                            )),
+                    ),
                 )
+                .when_some(add_to, |d, add_to| d.child(add_to))
                 .into_any_element()
         } else {
             content.into_any_element()

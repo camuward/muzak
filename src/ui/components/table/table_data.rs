@@ -1,6 +1,6 @@
 use std::{fmt::Debug, hash::Hash, sync::Arc};
 
-use gpui::{AnyElement, App, ElementId, SharedString};
+use gpui::{AnyElement, App, ElementId, SharedString, Window};
 use indexmap::IndexMap;
 use rustc_hash::FxBuildHasher;
 
@@ -124,12 +124,16 @@ where
     }
 
     /// Returns the context menu for this row in the current display context.
+    /// The first element is the menu content (rendered inside the context popup).
+    /// The second element is an optional overlay (e.g. a modal) rendered outside
+    /// the context popup so it is not nested inside `deferred`.
     fn get_context_menu(
         &self,
+        _window: &mut Window,
         _cx: &mut App,
         _context: &Self::ContextMenuContext,
         _grid_context: GridContext,
-    ) -> Option<AnyElement> {
+    ) -> Option<(AnyElement, Option<AnyElement>)> {
         None
     }
 

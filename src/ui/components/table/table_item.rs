@@ -89,11 +89,11 @@ where
     T: TableData<C> + 'static,
     C: Column + 'static,
 {
-    fn render(&mut self, _: &mut Window, cx: &mut Context<'_, Self>) -> impl IntoElement {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<'_, Self>) -> impl IntoElement {
         let row_data = self.row.clone();
         let is_available = self.is_available;
         let context_menu = self.row.as_ref().and_then(|row| {
-            row.get_context_menu(cx, &self.context_menu_context, GridContext::Table)
+            row.get_context_menu(window, cx, &self.context_menu_context, GridContext::Table)
         });
         let theme = cx.global::<Theme>();
         let drag_data = if is_available {
@@ -200,11 +200,14 @@ where
             }
         }
 
-        if let Some(menu) = context_menu {
-            context(self.id.clone().unwrap_or("bad-context".into()))
+        if let Some((menu, overlay)) = context_menu {
+            let ctx = context(self.id.clone().unwrap_or("bad-context".into()))
                 .with(row)
-                .child(div().bg(theme.elevated_background).child(menu))
-                .into_any_element()
+                .child(div().bg(theme.elevated_background).child(menu));
+            match overlay {
+                Some(overlay) => div().w_full().child(ctx).child(overlay).into_any_element(),
+                None => ctx.into_any_element(),
+            }
         } else {
             row.into_any_element()
         }

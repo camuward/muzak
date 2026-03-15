@@ -2,7 +2,7 @@ use std::{path::PathBuf, rc::Rc};
 
 use cntp_i18n::tr;
 use gpui::prelude::FluentBuilder;
-use gpui::{AppContext, IntoElement, ParentElement, RenderOnce, Window, div};
+use gpui::{Entity, IntoElement, RenderOnce, Window};
 
 use crate::{
     library::types::Track,
@@ -12,58 +12,44 @@ use crate::{
             icons::{DISC, FOLDER_SEARCH, PLAYLIST_ADD, USERS},
             menu::{menu, menu_item, menu_separator},
         },
-        library::add_to_playlist::AddToPlaylist,
     },
 };
 
 use super::{
-    InfoSectionMenuState, navigate_to_track_album, navigate_to_track_artist,
-    reveal_path_in_file_manager, track_show_in_file_manager_label,
+    navigate_to_track_album, navigate_to_track_artist, reveal_path_in_file_manager,
+    track_show_in_file_manager_label,
 };
 
 #[derive(IntoElement)]
 pub struct InfoSectionContextMenu {
     current_path: Option<PathBuf>,
     track: Option<Rc<Track>>,
+    show_add_to: Option<Entity<bool>>,
 }
 
 impl InfoSectionContextMenu {
-    pub fn new(current_path: Option<PathBuf>, track: Option<Rc<Track>>) -> Self {
+    pub fn new(
+        current_path: Option<PathBuf>,
+        track: Option<Rc<Track>>,
+        show_add_to: Option<Entity<bool>>,
+    ) -> Self {
         Self {
             current_path,
             track,
+            show_add_to,
         }
     }
 }
 
 impl RenderOnce for InfoSectionContextMenu {
-    fn render(self, window: &mut Window, cx: &mut gpui::App) -> impl IntoElement {
+    fn render(self, _window: &mut Window, _cx: &mut gpui::App) -> impl IntoElement {
         let reveal_path = self.current_path;
         let can_reveal_track = reveal_path
             .as_ref()
             .is_some_and(|path| is_track_path_available(path.as_path()));
         let track = self.track;
-        let add_to_state = track.as_ref().map(|track| {
-            let track_id = track.id;
-            let menu_state = window.use_keyed_state(
-                ("info-section-menu-state", track_id as usize),
-                cx,
-                |_, cx| {
-                    let show_add_to = cx.new(|_| false);
-                    let add_to = AddToPlaylist::new(cx, show_add_to.clone(), track_id);
 
-                    InfoSectionMenuState {
-                        show_add_to,
-                        add_to,
-                    }
-                },
-            );
-            let state = menu_state.read(cx);
-
-            (state.show_add_to.clone(), state.add_to.clone())
-        });
-
-        let menu = menu()
+        menu()
             .when_some(track.clone(), |menu, track_for_artist| {
                 let can_go_to_artist = track_for_artist.album_id.is_some();
                 menu.item(
@@ -105,8 +91,7 @@ impl RenderOnce for InfoSectionContextMenu {
                 )
                 .disabled(!can_reveal_track),
             )
-            .when_some(add_to_state.as_ref(), |menu, (show_add_to, _)| {
-                let show_add_to = show_add_to.clone();
+            .when_some(self.show_add_to, |menu, show_add_to| {
                 menu.item(menu_separator()).item(menu_item(
                     "info_section_add_to_playlist",
                     Some(PLAYLIST_ADD),
@@ -115,10 +100,6 @@ impl RenderOnce for InfoSectionContextMenu {
                         show_add_to.write(cx, true);
                     },
                 ))
-            });
-
-        div()
-            .when_some(add_to_state, |div, (_, add_to)| div.child(add_to))
-            .child(menu)
+            })
     }
 }

@@ -5,7 +5,7 @@ pub mod track;
 use std::{path::Path, process::Command, rc::Rc, sync::Arc};
 
 use cntp_i18n::tr;
-use gpui::{AnyElement, App, Entity, IntoElement, SharedString};
+use gpui::{AnyElement, App, AppContext, Entity, IntoElement, SharedString, Window};
 use rand::{rng, seq::SliceRandom};
 
 use crate::{
@@ -55,23 +55,47 @@ impl Default for AlbumContextMenuContext {
     }
 }
 
-struct TrackMenuState {
-    show_add_to: Entity<bool>,
-    add_to: Entity<AddToPlaylist>,
+pub(crate) struct AddToPlaylistState {
+    pub show: Entity<bool>,
+    pub add_to: Entity<AddToPlaylist>,
 }
 
-struct InfoSectionMenuState {
-    show_add_to: Entity<bool>,
-    add_to: Entity<AddToPlaylist>,
+/// Creates or retrieves the `AddToPlaylist` keyed state for the given track,
+/// returning the show toggle and the playlist entity.
+pub(crate) fn add_to_playlist_state(
+    key: &'static str,
+    track_id: i64,
+    window: &mut Window,
+    cx: &mut App,
+) -> (Entity<bool>, Entity<AddToPlaylist>) {
+    let menu_state = window.use_keyed_state((key, track_id as usize), cx, |_, cx| {
+        let show = cx.new(|_| false);
+        let add_to = AddToPlaylist::new(cx, show.clone(), track_id);
+        AddToPlaylistState { show, add_to }
+    });
+    let state = menu_state.read(cx);
+    (state.show.clone(), state.add_to.clone())
 }
 
 pub fn track_menu_for_table(
     track: &Track,
     is_available: bool,
     context: &TrackContextMenuContext,
-) -> AnyElement {
-    TrackContextMenu::new(Rc::new(track.clone()), is_available, context.clone(), None)
-        .into_any_element()
+    window: &mut Window,
+    cx: &mut App,
+) -> (AnyElement, Option<AnyElement>) {
+    let (show_add_to, add_to) = add_to_playlist_state("track-menu-state", track.id, window, cx);
+
+    let menu = TrackContextMenu::new(
+        Rc::new(track.clone()),
+        is_available,
+        context.clone(),
+        None,
+        show_add_to,
+    )
+    .into_any_element();
+
+    (menu, Some(add_to.into_any_element()))
 }
 
 pub fn album_menu_for_table(album: &Album, context: &AlbumContextMenuContext) -> AnyElement {

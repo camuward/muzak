@@ -126,6 +126,14 @@ impl TrackItem {
 
 impl Render for TrackItem {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let track_id = self.track.id;
+        let (show_add_to, add_to) = crate::ui::library::context_menus::add_to_playlist_state(
+            "track-menu-state",
+            track_id,
+            window,
+            cx,
+        );
+
         let theme = cx.global::<Theme>();
 
         let track_num_width = self
@@ -137,7 +145,6 @@ impl Render for TrackItem {
         let is_available = self.is_available;
 
         let track_location_for_drag = self.track.location.clone();
-        let track_id = self.track.id;
         let album_id = self.track.album_id;
         let track_title_for_drag: SharedString = self.track.title.clone().into();
 
@@ -155,203 +162,229 @@ impl Render for TrackItem {
             })),
         };
 
-        context(("context", self.track.id as usize))
-            .with(
-                div()
-                    .flex()
-                    .flex_col()
-                    .w_full()
-                    .id(self.track.id as usize)
-                    .when(is_available, |this| {
-                        this.on_click({
-                            let track = self.track.clone();
-                            let plid = self.pl_info.as_ref().map(|pl| pl.id);
-                            let queue_context = self.queue_context.clone();
-                            move |_, _, cx| {
-                                play_from_track_listing(cx, &track, plid, queue_context.clone())
-                            }
-                        })
-                    })
-                    .when(!is_available, |this| this.cursor_default().opacity(0.5))
-                    .when(self.is_start, |this| {
-                        this.child(
-                            div()
-                                .text_color(theme.text_secondary)
-                                .text_sm()
-                                .font_weight(FontWeight::SEMIBOLD)
-                                // 22px (from track # width) + 18 + 11
-                                .px(px(track_num_width.to_f64() as f32 + 18.0 + 13.0))
-                                .border_b_1()
-                                .w_full()
-                                .border_color(theme.border_color)
-                                .mt(px(18.0))
-                                .pb(px(6.0))
-                                .when_some(self.track.disc_number, |this, num| {
-                                    if self.vinyl_numbering {
-                                        let side = (b'A' + (num - 1) as u8) as char;
-                                        let side = side.to_string(); // TODO: fix this upstream
-                                        this.child(tr!("TRACK_SIDE", "Side {{side}}", side = side))
-                                    } else {
-                                        this.child(tr!("TRACK_DISC", "Disc {{num}}", num = num))
-                                    }
-                                }),
-                        )
-                    })
-                    .child(
+        div()
+            .w_full()
+            .child(
+                context(("context", self.track.id as usize))
+                    .with(
                         div()
                             .flex()
-                            .flex_row()
-                            .border_b_1()
-                            .h(px(39.0))
-                            .id(("track", self.track.id as u64))
+                            .flex_col()
                             .w_full()
-                            .border_color(theme.border_color)
-                            .when(is_available, |this| this.cursor_pointer())
-                            .when(!is_available, |this| this.cursor_default())
-                            .px(px(18.0))
-                            .py(px(6.0))
-                            .group(self.hover_group.clone())
+                            .id(self.track.id as usize)
                             .when(is_available, |this| {
-                                this.hover(|this| this.bg(theme.nav_button_hover))
-                                    .active(|this| this.bg(theme.nav_button_active))
-                            })
-                            // only handle drag when we're not in a playlist
-                            // playlists have their own drag handler
-                            .when(self.pl_info.is_none() && is_available, |this| {
-                                this.on_drag(
-                                    TrackDragData::from_track(
-                                        track_id,
-                                        album_id,
-                                        track_location_for_drag,
-                                        track_title_for_drag.clone(),
-                                    ),
-                                    move |_, _, _, cx| {
-                                        DragPreview::new(cx, track_title_for_drag.clone())
-                                    },
-                                )
-                            })
-                            .when_some(current_track, |this, track| {
-                                this.bg(if track == self.track.location {
-                                    theme.queue_item_current
-                                } else {
-                                    theme.background_primary
+                                this.on_click({
+                                    let track = self.track.clone();
+                                    let plid = self.pl_info.as_ref().map(|pl| pl.id);
+                                    let queue_context = self.queue_context.clone();
+                                    move |_, _, cx| {
+                                        play_from_track_listing(
+                                            cx,
+                                            &track,
+                                            plid,
+                                            queue_context.clone(),
+                                        )
+                                    }
                                 })
                             })
-                            .max_w_full()
-                            .when(self.left_field == TrackItemLeftField::TrackNum, |this| {
+                            .when(!is_available, |this| this.cursor_default().opacity(0.5))
+                            .when(self.is_start, |this| {
                                 this.child(
                                     div()
-                                        .min_w(track_num_width)
-                                        .flex_shrink_0()
-                                        .text_align(TextAlign::Right)
-                                        .mr(px(13.0))
                                         .text_color(theme.text_secondary)
-                                        // TODO: handle these numerals better
-                                        .child(format!(
-                                            "{}",
-                                            self.track.track_number.unwrap_or_default()
-                                        )),
-                                )
-                            })
-                            .when(self.left_field == TrackItemLeftField::Art, |this| {
-                                this.child(
-                                    div()
-                                        .w(px(22.0))
-                                        .h(px(22.0))
-                                        .mr(px(12.0))
-                                        .my_auto()
-                                        .rounded(px(3.0))
-                                        .bg(theme.album_art_background)
-                                        .when_some(self.album_art.clone(), |this, art| {
-                                            this.child(
-                                                img(art).w(px(22.0)).h(px(22.0)).rounded(px(3.0)),
-                                            )
+                                        .text_sm()
+                                        .font_weight(FontWeight::SEMIBOLD)
+                                        // 22px (from track # width) + 18 + 11
+                                        .px(px(track_num_width.to_f64() as f32 + 18.0 + 13.0))
+                                        .border_b_1()
+                                        .w_full()
+                                        .border_color(theme.border_color)
+                                        .mt(px(18.0))
+                                        .pb(px(6.0))
+                                        .when_some(self.track.disc_number, |this, num| {
+                                            if self.vinyl_numbering {
+                                                let side = (b'A' + (num - 1) as u8) as char;
+                                                let side = side.to_string(); // TODO: fix this upstream
+                                                this.child(tr!(
+                                                    "TRACK_SIDE",
+                                                    "Side {{side}}",
+                                                    side = side
+                                                ))
+                                            } else {
+                                                this.child(tr!(
+                                                    "TRACK_DISC",
+                                                    "Disc {{num}}",
+                                                    num = num
+                                                ))
+                                            }
                                         }),
                                 )
                             })
                             .child(
                                 div()
-                                    .font_weight(FontWeight::SEMIBOLD)
-                                    .overflow_x_hidden()
-                                    .text_ellipsis()
-                                    .mr_auto()
-                                    .child(self.track.title.clone()),
-                            )
-                            .child(
-                                div()
-                                    .font_weight(FontWeight::LIGHT)
-                                    .text_sm()
-                                    .my_auto()
-                                    .text_color(theme.text_secondary)
-                                    .text_ellipsis()
-                                    .overflow_x_hidden()
-                                    .flex_shrink()
-                                    .ml(px(12.0))
-                                    .when(show_artist_name, |this| {
-                                        this.when_some(
-                                            self.track.artist_names.clone(),
-                                            |this, v| this.child(v.0),
-                                        )
-                                    }),
-                            )
-                            .child(
-                                div()
-                                    .id("like")
-                                    .my_auto()
-                                    .rounded_sm()
-                                    .ml(px(10.0))
-                                    .p(px(4.0))
-                                    .child(
-                                        icon(if self.is_liked.is_some() {
-                                            STAR_FILLED
-                                        } else {
-                                            STAR
-                                        })
-                                        .size(px(14.0))
-                                        .text_color(theme.text_secondary),
-                                    )
+                                    .flex()
+                                    .flex_row()
+                                    .border_b_1()
+                                    .h(px(39.0))
+                                    .id(("track", self.track.id as u64))
+                                    .w_full()
+                                    .border_color(theme.border_color)
+                                    .when(is_available, |this| this.cursor_pointer())
+                                    .when(!is_available, |this| this.cursor_default())
+                                    .px(px(18.0))
+                                    .py(px(6.0))
                                     .group(self.hover_group.clone())
                                     .when(is_available, |this| {
-                                        this.hover(|this| this.bg(theme.button_secondary_hover))
-                                            .active(|this| this.bg(theme.button_secondary_active))
-                                            .on_click(cx.listener(move |this, _, _, cx| {
-                                                cx.stop_propagation();
-                                                let is_liked = this.is_liked;
-                                                let entity = cx.entity().clone();
-                                                if is_liked.is_some() {
-                                                    this.is_liked = None;
-                                                }
-                                                toggle_like(is_liked, track_id, entity, cx);
-                                            }))
-                                    }),
-                            )
-                            .child(
-                                div()
-                                    .ml(px(10.0))
-                                    .flex_shrink_0()
-                                    .min_w(px(60.0))
-                                    .border_l_1()
-                                    .pl(px(10.0))
-                                    .border_color(theme.border_color)
-                                    .text_align(TextAlign::Right)
-                                    .child(format!(
-                                        "{}:{:02}",
-                                        self.track.duration / 60,
-                                        self.track.duration % 60
-                                    )),
+                                        this.hover(|this| this.bg(theme.nav_button_hover))
+                                            .active(|this| this.bg(theme.nav_button_active))
+                                    })
+                                    // only handle drag when we're not in a playlist
+                                    // playlists have their own drag handler
+                                    .when(self.pl_info.is_none() && is_available, |this| {
+                                        this.on_drag(
+                                            TrackDragData::from_track(
+                                                track_id,
+                                                album_id,
+                                                track_location_for_drag,
+                                                track_title_for_drag.clone(),
+                                            ),
+                                            move |_, _, _, cx| {
+                                                DragPreview::new(cx, track_title_for_drag.clone())
+                                            },
+                                        )
+                                    })
+                                    .when_some(current_track, |this, track| {
+                                        this.bg(if track == self.track.location {
+                                            theme.queue_item_current
+                                        } else {
+                                            theme.background_primary
+                                        })
+                                    })
+                                    .max_w_full()
+                                    .when(self.left_field == TrackItemLeftField::TrackNum, |this| {
+                                        this.child(
+                                            div()
+                                                .min_w(track_num_width)
+                                                .flex_shrink_0()
+                                                .text_align(TextAlign::Right)
+                                                .mr(px(13.0))
+                                                .text_color(theme.text_secondary)
+                                                // TODO: handle these numerals better
+                                                .child(format!(
+                                                    "{}",
+                                                    self.track.track_number.unwrap_or_default()
+                                                )),
+                                        )
+                                    })
+                                    .when(self.left_field == TrackItemLeftField::Art, |this| {
+                                        this.child(
+                                            div()
+                                                .w(px(22.0))
+                                                .h(px(22.0))
+                                                .mr(px(12.0))
+                                                .my_auto()
+                                                .rounded(px(3.0))
+                                                .bg(theme.album_art_background)
+                                                .when_some(self.album_art.clone(), |this, art| {
+                                                    this.child(
+                                                        img(art)
+                                                            .w(px(22.0))
+                                                            .h(px(22.0))
+                                                            .rounded(px(3.0)),
+                                                    )
+                                                }),
+                                        )
+                                    })
+                                    .child(
+                                        div()
+                                            .font_weight(FontWeight::SEMIBOLD)
+                                            .overflow_x_hidden()
+                                            .text_ellipsis()
+                                            .mr_auto()
+                                            .child(self.track.title.clone()),
+                                    )
+                                    .child(
+                                        div()
+                                            .font_weight(FontWeight::LIGHT)
+                                            .text_sm()
+                                            .my_auto()
+                                            .text_color(theme.text_secondary)
+                                            .text_ellipsis()
+                                            .overflow_x_hidden()
+                                            .flex_shrink()
+                                            .ml(px(12.0))
+                                            .when(show_artist_name, |this| {
+                                                this.when_some(
+                                                    self.track.artist_names.clone(),
+                                                    |this, v| this.child(v.0),
+                                                )
+                                            }),
+                                    )
+                                    .child(
+                                        div()
+                                            .id("like")
+                                            .my_auto()
+                                            .rounded_sm()
+                                            .ml(px(10.0))
+                                            .p(px(4.0))
+                                            .child(
+                                                icon(if self.is_liked.is_some() {
+                                                    STAR_FILLED
+                                                } else {
+                                                    STAR
+                                                })
+                                                .size(px(14.0))
+                                                .text_color(theme.text_secondary),
+                                            )
+                                            .group(self.hover_group.clone())
+                                            .when(is_available, |this| {
+                                                this.hover(|this| {
+                                                    this.bg(theme.button_secondary_hover)
+                                                })
+                                                .active(|this| {
+                                                    this.bg(theme.button_secondary_active)
+                                                })
+                                                .on_click(cx.listener(move |this, _, _, cx| {
+                                                    cx.stop_propagation();
+                                                    let is_liked = this.is_liked;
+                                                    let entity = cx.entity().clone();
+                                                    if is_liked.is_some() {
+                                                        this.is_liked = None;
+                                                    }
+                                                    toggle_like(is_liked, track_id, entity, cx);
+                                                }))
+                                            }),
+                                    )
+                                    .child(
+                                        div()
+                                            .ml(px(10.0))
+                                            .flex_shrink_0()
+                                            .min_w(px(60.0))
+                                            .border_l_1()
+                                            .pl(px(10.0))
+                                            .border_color(theme.border_color)
+                                            .text_align(TextAlign::Right)
+                                            .child(format!(
+                                                "{}:{:02}",
+                                                self.track.duration / 60,
+                                                self.track.duration % 60
+                                            )),
+                                    ),
                             ),
+                    )
+                    .child(
+                        div()
+                            .bg(theme.elevated_background)
+                            .child(TrackContextMenu::new(
+                                Rc::new(self.track.clone()),
+                                is_available,
+                                track_menu_context,
+                                self.pl_info,
+                                show_add_to,
+                            )),
                     ),
             )
-            .child(
-                div()
-                    .bg(theme.elevated_background)
-                    .child(TrackContextMenu::new(
-                        Rc::new(self.track.clone()),
-                        is_available,
-                        track_menu_context,
-                        self.pl_info,
-                    )),
-            )
+            .child(add_to)
     }
 }
 
