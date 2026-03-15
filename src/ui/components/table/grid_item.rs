@@ -128,7 +128,7 @@ where
         };
 
         let mut img_container = div()
-            .w_full()
+            .size_full()
             .flex_1()
             .rounded(px(6.0))
             .bg(theme.album_art_background)
@@ -171,6 +171,8 @@ where
 
         if let Some(menu) = context_menu {
             context(self.id.clone())
+                .w_full()
+                .h_full()
                 .with(content)
                 .child(div().bg(theme.elevated_background).child(menu))
                 .into_any_element()

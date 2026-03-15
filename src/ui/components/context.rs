@@ -76,7 +76,8 @@ impl Element for ContextMenu {
         window: &mut Window,
         cx: &mut App,
     ) -> (LayoutId, Self::RequestLayoutState) {
-        let style = Style::default();
+        let mut style = Style::default();
+        style.refine(&self.style);
 
         let mut layout_ids: SmallVec<[LayoutId; 2]> = SmallVec::new();
 
