@@ -25,9 +25,9 @@ pub async fn create_pool(path: impl AsRef<Path>) -> sqlx::Result<SqlitePool> {
         .create_if_missing(true);
     let pool = SqlitePool::connect_with(options).await?;
 
-    sqlx::query("PRAGMA mmap_size = 30000000000")
-        .execute(&pool)
-        .await?;
+    // sqlx::query("PRAGMA mmap_size = 30000000000")
+    //     .execute(&pool)
+    //     .await?;
 
     let migrations = sqlx::migrate!("./migrations")
         .set_ignore_missing(true)
