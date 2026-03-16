@@ -23,6 +23,7 @@ pub struct ResizableSidebar {
     min_width: Pixels,
     max_width: Pixels,
     default_width: Pixels,
+    border_width: Pixels,
 }
 
 impl ResizableSidebar {
@@ -36,6 +37,7 @@ impl ResizableSidebar {
             min_width: px(150.0),
             max_width: px(500.0),
             default_width: px(225.0),
+            border_width: px(1.0),
         }
     }
 
@@ -51,6 +53,11 @@ impl ResizableSidebar {
 
     pub fn default_width(mut self, default: Pixels) -> Self {
         self.default_width = default;
+        self
+    }
+
+    pub fn border_width(mut self, width: Pixels) -> Self {
+        self.border_width = width;
         self
     }
 }
@@ -201,7 +208,11 @@ impl Element for ResizableSidebar {
 
                 let is_dragging = state.borrow().is_dragging;
 
-                let line_width = if is_dragging { px(2.0) } else { px(1.0) };
+                let line_width = if is_dragging {
+                    self.border_width * 2
+                } else {
+                    self.border_width
+                };
                 let line_bounds = match side {
                     ResizeSide::Left => Bounds {
                         origin: Point {

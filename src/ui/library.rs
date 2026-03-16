@@ -521,6 +521,7 @@ impl Render for Library {
                 .overflow_hidden()
                 .child(
                     resizable_sidebar("split-resizable", effective_entity, ResizeSide::Right)
+                        .border_width(px(2.0))
                         .min_width(px(250.0))
                         .max_width(dynamic_max)
                         .default_width(DEFAULT_SPLIT_WIDTH)
