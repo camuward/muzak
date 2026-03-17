@@ -28,6 +28,7 @@ use cntp_i18n::tr;
 use gpui::*;
 use prelude::FluentBuilder;
 use rustc_hash::FxHashMap;
+use std::time::{Duration, Instant};
 
 use super::{
     components::button::{ButtonSize, ButtonStyle, button},
@@ -39,7 +40,15 @@ use super::{
 /// The list identifier for queue drag-drop operations
 const QUEUE_LIST_ID: &str = "queue";
 /// Height of each queue item in pixels
-const QUEUE_ITEM_HEIGHT: f32 = 59.0;
+const QUEUE_ITEM_HEIGHT: f32 = 60.0;
+/// Duration of the queue auto-follow animation.
+const QUEUE_FOLLOW_ANIMATION_DURATION: Duration = Duration::from_millis(180);
+
+struct QueueFollowAnimation {
+    start_scroll_top: Pixels,
+    target_scroll_top: Pixels,
+    started_at: Instant,
+}
 
 pub struct QueueItem {
     item: Option<QueueItemData>,
@@ -308,6 +317,11 @@ pub struct Queue {
     show_queue: Entity<bool>,
     scroll_handle: UniformListScrollHandle,
     drag_drop_manager: Entity<DragDropListManager>,
+    last_queue_position: usize,
+    queue_hovered: bool,
+    follow_current_pending: bool,
+    follow_frame_scheduled: bool,
+    follow_animation: Option<QueueFollowAnimation>,
 }
 
 impl Queue {
@@ -316,11 +330,19 @@ impl Queue {
             let views_model = cx.new(|_| FxHashMap::default());
             let render_counter = cx.new(|_| 0);
             let items = cx.global::<Models>().queue.clone();
+            let initial_queue_position = items.read(cx).position;
 
             let config = DragDropListConfig::new(QUEUE_LIST_ID, px(QUEUE_ITEM_HEIGHT));
             let drag_drop_manager = DragDropListManager::new(cx, config);
 
             cx.observe(&items, move |this: &mut Queue, _, cx| {
+                let new_position = cx.global::<Models>().queue.read(cx).position;
+                if this.last_queue_position != new_position {
+                    this.last_queue_position = new_position;
+                    this.follow_current_pending = true;
+                    this.follow_animation = None;
+                }
+
                 this.views_model = cx.new(|_| FxHashMap::default());
                 this.render_counter = cx.new(|_| 0);
 
@@ -345,32 +367,49 @@ impl Queue {
                 show_queue,
                 scroll_handle: UniformListScrollHandle::new(),
                 drag_drop_manager,
+                last_queue_position: initial_queue_position,
+                queue_hovered: false,
+                follow_current_pending: false,
+                follow_frame_scheduled: false,
+                follow_animation: None,
             }
         })
     }
 }
 
 impl Render for Queue {
-    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         check_drag_cancelled(self.drag_drop_manager.clone(), cx);
 
-        let theme = cx.global::<Theme>();
-        let queue = cx
+        let theme = cx.global::<Theme>().clone();
+        let queue_len = cx
             .global::<Models>()
             .queue
             .clone()
             .read(cx)
             .data
             .read()
-            .expect("could not read queue");
-        let queue_len = queue.len();
-        let shuffling = self.shuffling.read(cx);
+            .expect("could not read queue")
+            .len();
+        let shuffling = *self.shuffling.read(cx);
         let views_model = self.views_model.clone();
         let render_counter = self.render_counter.clone();
         let scroll_handle = self.scroll_handle.clone();
         let drag_drop_manager = self.drag_drop_manager.clone();
+        let is_dragging = self.drag_drop_manager.read(cx).state.is_dragging;
 
         let queue_width = cx.global::<Models>().queue_width.clone();
+
+        if self.follow_animation.is_some() && (self.queue_hovered || is_dragging) {
+            self.follow_animation = None;
+        }
+
+        if (self.follow_current_pending || self.follow_animation.is_some())
+            && !self.queue_hovered
+            && !is_dragging
+        {
+            self.schedule_follow_frame(window, cx);
+        }
 
         resizable_sidebar("queue-resizable", queue_width.clone(), ResizeSide::Left)
             .min_width(px(225.0))
@@ -437,7 +476,7 @@ impl Render for Queue {
                                     .style(ButtonStyle::MinimalNoRounding)
                                     .size(ButtonSize::Large)
                                     .child(icon(SHUFFLE).size(px(14.0)).my_auto())
-                                    .when(*shuffling, |this| {
+                                    .when(shuffling, |this| {
                                         this.child(tr!("SHUFFLING", "Shuffling"))
                                     })
                                     .when(!shuffling, |this| this.child(tr!("SHUFFLE", "Shuffle")))
@@ -455,6 +494,19 @@ impl Render for Queue {
                             .w_full()
                             .h_full()
                             .relative()
+                            .on_hover(cx.listener(|this, is_hovering: &bool, _, cx| {
+                                if this.queue_hovered == *is_hovering {
+                                    return;
+                                }
+
+                                this.queue_hovered = *is_hovering;
+
+                                if *is_hovering {
+                                    this.follow_animation = None;
+                                }
+
+                                cx.notify();
+                            }))
                             .on_drag_move::<DragData>(cx.listener(
                                 move |this: &mut Queue,
                                       event: &DragMoveEvent<DragData>,
@@ -796,6 +848,115 @@ impl Render for Queue {
 }
 
 impl Queue {
+    fn schedule_follow_frame(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.follow_frame_scheduled {
+            return;
+        }
+
+        self.follow_frame_scheduled = true;
+        cx.on_next_frame(window, |this, window, cx| {
+            this.follow_frame_scheduled = false;
+            this.advance_follow_animation(window, cx);
+        });
+    }
+
+    fn advance_follow_animation(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.queue_hovered || self.drag_drop_manager.read(cx).state.is_dragging {
+            self.follow_animation = None;
+            return;
+        }
+
+        if self.follow_current_pending {
+            match self.compute_follow_target(cx) {
+                FollowTarget::PendingLayout => {
+                    self.schedule_follow_frame(window, cx);
+                    return;
+                }
+                FollowTarget::NoScrollNeeded => {
+                    self.follow_current_pending = false;
+                    return;
+                }
+                FollowTarget::Target(target_scroll_top) => {
+                    let scroll_handle: ScrollableHandle = self.scroll_handle.clone().into();
+                    let current_scroll_top = -scroll_handle.offset().y;
+
+                    self.follow_animation = Some(QueueFollowAnimation {
+                        start_scroll_top: current_scroll_top,
+                        target_scroll_top,
+                        started_at: Instant::now(),
+                    });
+                    self.follow_current_pending = false;
+                }
+            }
+        }
+
+        let Some(animation) = self.follow_animation.as_ref() else {
+            return;
+        };
+
+        let progress = (animation.started_at.elapsed().as_secs_f32()
+            / QUEUE_FOLLOW_ANIMATION_DURATION.as_secs_f32())
+        .clamp(0.0, 1.0);
+        let eased_progress = 1.0 - (1.0 - progress).powi(3);
+
+        let scroll_handle: ScrollableHandle = self.scroll_handle.clone().into();
+        let current_offset = scroll_handle.offset();
+        let current_scroll_top = animation.start_scroll_top
+            + (animation.target_scroll_top - animation.start_scroll_top) * eased_progress;
+
+        scroll_handle.set_offset(gpui::Point {
+            x: current_offset.x,
+            y: -current_scroll_top,
+        });
+
+        if progress >= 1.0 {
+            self.follow_animation = None;
+        } else {
+            self.schedule_follow_frame(window, cx);
+        };
+
+        cx.notify();
+    }
+
+    fn compute_follow_target(&self, cx: &App) -> FollowTarget {
+        let queue = cx.global::<Models>().queue.read(cx);
+        let position = queue.position;
+        let queue_len = queue.data.read().expect("could not read queue").len();
+
+        if queue_len == 0 || position >= queue_len {
+            return FollowTarget::NoScrollNeeded;
+        }
+
+        let scroll_handle: ScrollableHandle = self.scroll_handle.clone().into();
+        let bounds = scroll_handle.bounds();
+        let viewport_height = bounds.size.height;
+
+        if viewport_height <= px(0.0) {
+            return FollowTarget::PendingLayout;
+        }
+
+        let current_scroll_top = -scroll_handle.offset().y;
+        let current_scroll_bottom = current_scroll_top + viewport_height;
+        let max_scroll_top = scroll_handle.max_offset().y.max(px(0.0));
+
+        let item_top = px(position as f32 * QUEUE_ITEM_HEIGHT);
+        let item_bottom = item_top + px(QUEUE_ITEM_HEIGHT);
+
+        let target_scroll_top = if item_top < current_scroll_top {
+            item_top
+        } else if item_bottom > current_scroll_bottom {
+            (item_bottom - viewport_height).min(max_scroll_top)
+        } else {
+            return FollowTarget::NoScrollNeeded;
+        };
+
+        if (target_scroll_top - current_scroll_top).abs() <= px(0.1) {
+            FollowTarget::NoScrollNeeded
+        } else {
+            FollowTarget::Target(target_scroll_top)
+        }
+    }
+
     fn schedule_edge_scroll(
         manager: Entity<DragDropListManager>,
         scroll_handle: ScrollableHandle,
@@ -815,4 +976,10 @@ impl Queue {
             window.refresh();
         }
     }
+}
+
+enum FollowTarget {
+    PendingLayout,
+    NoScrollNeeded,
+    Target(Pixels),
 }
