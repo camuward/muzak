@@ -16,6 +16,7 @@ mod lyrics;
 pub mod models;
 mod queue;
 mod right_sidebar;
+mod scroll_follow;
 mod search;
 mod settings;
 mod theme;

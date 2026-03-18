@@ -91,10 +91,13 @@ struct ScrollbarState {
     is_hovered: bool,
 }
 
+type InteractionHandler = Rc<dyn Fn(&mut Window, &mut App)>;
+
 pub struct Scrollbar {
     id: Option<ElementId>,
     style: StyleRefinement,
     scroll_handle: Option<ScrollableHandle>,
+    on_interaction: Option<InteractionHandler>,
     // assigned as variable in case we want this to be different later
     hide_delay: Duration,
     fade_duration: Duration,
@@ -108,6 +111,14 @@ impl Scrollbar {
 
     pub fn scroll_handle(mut self, scroll_handle: ScrollableHandle) -> Self {
         self.scroll_handle = Some(scroll_handle);
+        self
+    }
+
+    pub fn on_interaction(
+        mut self,
+        handler: impl Fn(&mut Window, &mut App) + 'static,
+    ) -> Self {
+        self.on_interaction = Some(Rc::new(handler));
         self
     }
 }
@@ -256,6 +267,7 @@ impl Element for Scrollbar {
         let Some(scroll_handle) = self.scroll_handle.as_ref() else {
             return;
         };
+        let on_interaction = self.on_interaction.clone();
 
         let hitbox_for_events = hitbox;
         let hide_delay = self.hide_delay;
@@ -273,6 +285,10 @@ impl Element for Scrollbar {
                 let state_for_move = scrollbar_state.clone();
                 let state_for_up = scrollbar_state.clone();
                 let state_for_scroll = scrollbar_state.clone();
+                let on_interaction_down = on_interaction.clone();
+                let on_interaction_move = on_interaction.clone();
+                let on_interaction_up = on_interaction.clone();
+                let on_interaction_scroll = on_interaction.clone();
 
                 let scroll_handle_down = scroll_handle.clone();
                 let scroll_handle_move = scroll_handle.clone();
@@ -397,6 +413,9 @@ impl Element for Scrollbar {
                     if hitbox_scroll.is_hovered(window) {
                         let mut state = state_for_scroll.borrow_mut();
                         state.last_interaction_time = Some(Instant::now());
+                        if let Some(handler) = on_interaction_scroll.as_ref() {
+                            handler(window, _cx);
+                        }
                         window.refresh();
                     }
                 });
@@ -412,6 +431,9 @@ impl Element for Scrollbar {
 
                     let mut state = state_for_down.borrow_mut();
                     state.last_interaction_time = Some(Instant::now());
+                    if let Some(handler) = on_interaction_down.as_ref() {
+                        handler(window, cx);
+                    }
 
                     let expanded_thumb_bounds = Bounds {
                         origin: gpui::Point {
@@ -464,6 +486,9 @@ impl Element for Scrollbar {
                     }
 
                     state.last_interaction_time = Some(Instant::now());
+                    if let Some(handler) = on_interaction_move.as_ref() {
+                        handler(window, _cx);
+                    }
 
                     let delta_y = ev.position.y - state.drag_start_y;
                     let available_track = inner_bounds_move.size.height - thumb_height_move;
@@ -491,6 +516,9 @@ impl Element for Scrollbar {
                     if state.dragging {
                         state.dragging = false;
                         state.last_interaction_time = Some(Instant::now());
+                        if let Some(handler) = on_interaction_up.as_ref() {
+                            handler(window, _cx);
+                        }
                         window.refresh();
                     }
                 });
@@ -506,6 +534,7 @@ pub fn scrollbar() -> Scrollbar {
         id: None,
         style: StyleRefinement::default(),
         scroll_handle: None,
+        on_interaction: None,
         hide_delay: Duration::from_millis(800),
         fade_duration: Duration::from_millis(200),
     }
@@ -522,11 +551,26 @@ pub struct FloatingScrollbar {
     id: ElementId,
     handle: ScrollableHandle,
     right_pad: RightPad,
+    on_interaction: Option<InteractionHandler>,
+}
+
+impl FloatingScrollbar {
+    pub fn on_interaction(
+        mut self,
+        handler: impl Fn(&mut Window, &mut App) + 'static,
+    ) -> Self {
+        self.on_interaction = Some(Rc::new(handler));
+        self
+    }
 }
 
 impl RenderOnce for FloatingScrollbar {
     fn render(self, _: &mut Window, cx: &mut App) -> impl IntoElement {
         let theme = cx.global::<Theme>();
+        let mut sb = scrollbar().id(self.id).scroll_handle(self.handle);
+        if let Some(handler) = self.on_interaction {
+            sb = sb.on_interaction(move |window, cx| handler(window, cx));
+        }
 
         div()
             .absolute()
@@ -540,9 +584,7 @@ impl RenderOnce for FloatingScrollbar {
             .my(px(4.0))
             .occlude()
             .child(
-                scrollbar()
-                    .id(self.id)
-                    .scroll_handle(self.handle)
+                sb
                     .w(px(10.0))
                     .h_full()
                     .bg(theme.scrollbar_background)
@@ -563,5 +605,6 @@ pub fn floating_scrollbar(
         id: id.into(),
         handle: handle.into(),
         right_pad,
+        on_interaction: None,
     }
 }

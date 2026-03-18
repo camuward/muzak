@@ -199,7 +199,7 @@
   },
   "CLEAR_QUEUE": {
     "context": "queue.rs",
-    "definedIn": "src/ui/queue.rs:452",
+    "definedIn": "src/ui/queue.rs:447",
     "plural": false,
     "description": null
   },
@@ -325,13 +325,13 @@
   },
   "GO_TO_ALBUM": {
     "context": "queue.rs",
-    "definedIn": "src/ui/queue.rs:241",
+    "definedIn": "src/ui/queue.rs:236",
     "plural": false,
     "description": null
   },
   "GO_TO_ARTIST": {
     "context": "queue.rs",
-    "definedIn": "src/ui/queue.rs:258",
+    "definedIn": "src/ui/queue.rs:253",
     "plural": false,
     "description": null
   },
@@ -445,7 +445,7 @@
   },
   "NO_LYRICS": {
     "context": "lyrics.rs",
-    "definedIn": "src/ui/lyrics.rs:119",
+    "definedIn": "src/ui/lyrics.rs:150",
     "plural": false,
     "description": null
   },
@@ -529,7 +529,7 @@
   },
   "QUEUE_TITLE": {
     "context": "queue.rs",
-    "definedIn": "src/ui/queue.rs:437",
+    "definedIn": "src/ui/queue.rs:432",
     "plural": false,
     "description": null
   },
@@ -559,7 +559,7 @@
   },
   "REMOVE_FROM_QUEUE": {
     "context": "queue.rs",
-    "definedIn": "src/ui/queue.rs:290",
+    "definedIn": "src/ui/queue.rs:285",
     "plural": false,
     "description": null
   },
@@ -811,13 +811,13 @@
   },
   "SHUFFLE": {
     "context": "queue.rs",
-    "definedIn": "src/ui/queue.rs:466",
+    "definedIn": "src/ui/queue.rs:461",
     "plural": false,
     "description": null
   },
   "SHUFFLING": {
     "context": "queue.rs",
-    "definedIn": "src/ui/queue.rs:465",
+    "definedIn": "src/ui/queue.rs:460",
     "plural": false,
     "description": null
   },
