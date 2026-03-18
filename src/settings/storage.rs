@@ -8,6 +8,7 @@ use crate::{library::db::LikedTrackSortMethod, ui::models::CurrentTrack};
 pub const DEFAULT_SIDEBAR_WIDTH: Pixels = px(225.0);
 pub const DEFAULT_QUEUE_WIDTH: Pixels = px(275.0);
 pub const DEFAULT_SPLIT_WIDTH: Pixels = px(400.0);
+pub const DEFAULT_LYRICS_HEIGHT: Pixels = px(200.0);
 
 fn default_sidebar_width() -> f32 {
     f32::from(DEFAULT_SIDEBAR_WIDTH)
@@ -35,6 +36,10 @@ fn default_table_view_mode() -> TableViewModeSetting {
 
 fn default_liked_tracks_sort_method() -> LikedTrackSortMethod {
     LikedTrackSortMethod::ReleaseOrder
+}
+
+fn default_lyrics_height() -> f32 {
+    f32::from(DEFAULT_LYRICS_HEIGHT)
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, Default, PartialEq, Eq)]
@@ -76,6 +81,9 @@ pub struct StorageData {
     pub liked_tracks_sort_method: LikedTrackSortMethod,
     #[serde(default)]
     pub sidebar_collapsed: bool,
+    /// Height of the lyrics panel in pixels
+    #[serde(default = "default_lyrics_height")]
+    pub lyrics_height: f32,
 }
 
 impl StorageData {
@@ -90,6 +98,10 @@ impl StorageData {
     pub fn split_width(&self) -> Pixels {
         px(self.split_width)
     }
+
+    pub fn lyrics_height(&self) -> Pixels {
+        px(self.lyrics_height)
+    }
 }
 
 impl Default for StorageData {
@@ -103,6 +115,7 @@ impl Default for StorageData {
             table_settings: HashMap::new(),
             liked_tracks_sort_method: default_liked_tracks_sort_method(),
             sidebar_collapsed: false,
+            lyrics_height: f32::from(DEFAULT_LYRICS_HEIGHT),
         }
     }
 }

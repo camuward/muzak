@@ -1,4 +1,4 @@
-use crate::library::scan::discover::file_is_scannable_with_provider;
+use crate::library::scan::discover::{file_is_scannable_with_provider, sidecar_lyrics_path};
 use std::{io::Cursor, sync::Arc};
 
 use camino::{Utf8Path, Utf8PathBuf};
@@ -144,6 +144,14 @@ pub fn read_metadata_for_path(
                 && let Some(art) = scan_path_for_album_art(path, art_cache)
             {
                 metadata.2 = Some(art.to_vec().into_boxed_slice());
+            }
+
+            if metadata.0.lyrics.is_none() {
+                if let Some(lrc_path) = sidecar_lyrics_path(path) {
+                    if let Ok(content) = std::fs::read_to_string(lrc_path) {
+                        metadata.0.lyrics = Some(content);
+                    }
+                }
             }
 
             return Some(metadata);

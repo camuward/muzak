@@ -153,6 +153,27 @@ async fn insert_album(
 /// Album-path cache key: (album_id, disc_num).
 pub type AlbumPathCacheKey = (i64, i64);
 
+async fn upsert_lyrics(
+    conn: &mut SqliteConnection,
+    track_id: i64,
+    content: &str,
+) -> anyhow::Result<()> {
+    sqlx::query(include_str!("../../../queries/scan/upsert_lyrics.sql"))
+        .bind(track_id)
+        .bind(content)
+        .execute(&mut *conn)
+        .await?;
+    Ok(())
+}
+
+async fn delete_lyrics(conn: &mut SqliteConnection, track_id: i64) -> anyhow::Result<()> {
+    sqlx::query(include_str!("../../../queries/scan/delete_lyrics.sql"))
+        .bind(track_id)
+        .execute(&mut *conn)
+        .await?;
+    Ok(())
+}
+
 async fn insert_track(
     conn: &mut SqliteConnection,
     metadata: &Metadata,
@@ -160,9 +181,9 @@ async fn insert_track(
     path: &Utf8Path,
     length: u64,
     album_path_cache: &mut FxHashMap<AlbumPathCacheKey, Utf8PathBuf>,
-) -> anyhow::Result<()> {
+) -> anyhow::Result<Option<i64>> {
     if album_id.is_none() {
-        return Ok(());
+        return Ok(None);
     }
 
     let album_id_val = album_id.unwrap();
@@ -173,7 +194,7 @@ async fn insert_track(
     // Check album-path cache first to avoid DB round-trips
     if let Some(cached_path) = album_path_cache.get(&ap_key) {
         if cached_path.as_path() != parent {
-            return Ok(());
+            return Ok(None);
         }
     } else {
         let find_path: Result<(String,), _> =
@@ -188,7 +209,7 @@ async fn insert_track(
                 let found_path = Utf8PathBuf::from(&found.0);
                 album_path_cache.insert(ap_key, found_path.clone());
                 if found_path.as_path() != parent {
-                    return Ok(());
+                    return Ok(None);
                 }
             }
             Err(sqlx::Error::RowNotFound) => {
@@ -230,8 +251,8 @@ async fn insert_track(
             .await;
 
     match result {
-        Ok(_) => Ok(()),
-        Err(sqlx::Error::RowNotFound) => Ok(()),
+        Ok((track_id,)) => Ok(Some(track_id)),
+        Err(sqlx::Error::RowNotFound) => Ok(None),
         Err(e) => Err(e.into()),
     }
 }
@@ -278,7 +299,15 @@ pub async fn update_metadata(
         album_cache,
     )
     .await?;
-    insert_track(conn, metadata, album_id, path, length, album_path_cache).await?;
+    let track_id = insert_track(conn, metadata, album_id, path, length, album_path_cache).await?;
+
+    if let Some(track_id) = track_id {
+        if let Some(lyrics) = &metadata.lyrics {
+            upsert_lyrics(conn, track_id, lyrics).await?;
+        } else {
+            delete_lyrics(conn, track_id).await?;
+        }
+    }
 
     Ok(())
 }

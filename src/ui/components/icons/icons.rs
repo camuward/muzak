@@ -49,3 +49,4 @@ pub const USERS: &str = "!bundled:icons/users.svg";
 pub const SORT_DESCENDING: &str = "!bundled:icons/sort-descending.svg";
 pub const SORT_ASCENDING: &str = "!bundled:icons/sort-ascending.svg";
 pub const FOLDER_X: &str = "!bundled:icons/folder-x.svg";
+pub const MICROPHONE: &str = "!bundled:icons/microphone-2.svg";

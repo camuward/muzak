@@ -242,6 +242,9 @@ impl SymphoniaStream {
                 Some(StandardTagKey::MusicBrainzAlbumId) => {
                     self.current_metadata.mbid_album = Some(tag.value.to_string())
                 }
+                Some(StandardTagKey::Lyrics) => {
+                    self.current_metadata.lyrics = Some(tag.value.to_string())
+                }
                 Some(StandardTagKey::ReplayGainTrackGain) => {
                     self.current_metadata.replaygain_track_gain = parse_rg_gain(&tag.value);
                 }

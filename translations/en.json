@@ -73,6 +73,7 @@
   "LIBRARY_SHUFFLE_ALL": "Shuffle All",
   "LIKED_SONGS": "Liked Songs",
   "NEW_PLAYLIST": "New Playlist",
+  "NO_LYRICS": "No lyrics",
   "PALETTE_SHOW_MORE": {
     "one": "Show {{count}} more...",
     "other": "Show {{count}} more..."

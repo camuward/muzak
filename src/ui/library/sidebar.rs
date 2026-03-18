@@ -19,7 +19,7 @@ use crate::{
         components::{
             icons::{DISC, SEARCH, USERS},
             nav_button::nav_button,
-            resizable_sidebar::{ResizeSide, resizable_sidebar},
+            resizable::{ResizeEdge, resizable},
             sidebar::{sidebar, sidebar_item, sidebar_separator},
         },
         global_actions::Search,
@@ -233,14 +233,14 @@ impl Render for Sidebar {
                 .child(sidebar_content)
                 .into_any_element()
         } else {
-            resizable_sidebar(
+            resizable(
                 "main-sidebar-resizable",
                 sidebar_width.clone(),
-                ResizeSide::Right,
+                ResizeEdge::Right,
             )
-            .min_width(px(175.0))
-            .max_width(px(350.0))
-            .default_width(DEFAULT_SIDEBAR_WIDTH)
+            .min_size(px(175.0))
+            .max_size(px(350.0))
+            .default_size(DEFAULT_SIDEBAR_WIDTH)
             .h_full()
             .child(sidebar_content)
             .into_any_element()

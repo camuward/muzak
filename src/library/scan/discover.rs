@@ -1,4 +1,7 @@
-use std::{sync::Arc, time::SystemTime};
+use std::{
+    sync::Arc,
+    time::{Duration, SystemTime, UNIX_EPOCH},
+};
 
 use camino::{Utf8Path, Utf8PathBuf};
 use rustc_hash::{FxHashMap, FxHashSet};
@@ -24,6 +27,37 @@ pub fn file_is_scannable_with_provider(path: &Utf8Path, exts: &[String]) -> bool
     false
 }
 
+pub fn sidecar_lyrics_path(path: &Utf8Path) -> Option<Utf8PathBuf> {
+    let stem = path.file_stem()?;
+    let parent = path.parent()?;
+    Some(parent.join(format!("{}.lrc", stem)))
+}
+
+fn file_scan_timestamp(path: &Utf8Path) -> Option<SystemTime> {
+    let audio_timestamp = std::fs::metadata(path).ok()?.modified().ok()?;
+    let lyrics_timestamp = sidecar_lyrics_path(path)
+        .and_then(|lrc_path| std::fs::metadata(lrc_path).ok())
+        .and_then(|metadata| metadata.modified().ok());
+    let base_timestamp = match lyrics_timestamp {
+        Some(lyrics_timestamp) if lyrics_timestamp > audio_timestamp => lyrics_timestamp,
+        _ => audio_timestamp,
+    };
+
+    let presence_offset = if lyrics_timestamp.is_some() {
+        Duration::from_nanos(1)
+    } else {
+        Duration::ZERO
+    };
+    UNIX_EPOCH
+        .checked_add(
+            base_timestamp
+                .duration_since(UNIX_EPOCH)
+                .ok()?
+                .checked_add(presence_offset)?,
+        )
+        .or(Some(base_timestamp))
+}
+
 /// Check if a file should be scanned.
 /// Returns `Some(timestamp)` if the file should be scanned (not in scan_record or modified since last scan).
 /// Returns `None` if the file should be skipped or cannot be scanned.
@@ -32,12 +66,7 @@ fn file_is_scannable(
     scan_record: &FxHashMap<Utf8PathBuf, SystemTime>,
     provider_table: &[(Vec<String>, Box<dyn MediaProvider>)],
 ) -> Option<SystemTime> {
-    let Ok(timestamp) = (match std::fs::metadata(path) {
-        Ok(metadata) => metadata.modified(),
-        Err(_) => return None,
-    }) else {
-        return None;
-    };
+    let timestamp = file_scan_timestamp(path)?;
 
     for (exts, _) in provider_table.iter() {
         let x = file_is_scannable_with_provider(path, exts);
@@ -105,48 +134,7 @@ pub async fn cleanup_removed_directories(
     let mut deleted: Vec<Utf8PathBuf> = Vec::with_capacity(to_remove.len());
     for path in &to_remove {
         debug!("removing track from removed directory: {:?}", path);
-        let affected_playlists = sqlx::query_scalar::<_, i64>(include_str!(
-            "../../../queries/scan/list_playlist_ids_for_track.sql"
-        ))
-        .bind(path.as_str())
-        .fetch_all(&mut *tx)
-        .await;
-
-        let affected_playlists = match affected_playlists {
-            Ok(ids) => ids,
-            Err(e) => {
-                error!(
-                    "Database error while listing affected playlists for track cleanup: {:?}",
-                    e
-                );
-                continue;
-            }
-        };
-
-        let playlist_result = sqlx::query(include_str!(
-            "../../../queries/scan/delete_playlist_items_for_track.sql"
-        ))
-        .bind(path.as_str())
-        .execute(&mut *tx)
-        .await;
-
-        if let Err(e) = playlist_result {
-            error!(
-                "Database error while deleting playlist items for track: {:?}",
-                e
-            );
-            continue;
-        }
-        updated_playlists.extend(affected_playlists);
-
-        let track_result = sqlx::query(include_str!("../../../queries/scan/delete_track.sql"))
-            .bind(path.as_str())
-            .execute(&mut *tx)
-            .await;
-
-        if let Err(e) = track_result {
-            error!("Database error while deleting track: {:?}", e);
-        } else {
+        if cleanup_track(&mut tx, path, &mut updated_playlists).await {
             deleted.push(path.clone());
         }
     }
@@ -166,6 +154,70 @@ pub async fn cleanup_removed_directories(
     );
 
     updated_playlists
+}
+
+async fn cleanup_track(
+    tx: &mut sqlx::Transaction<'_, sqlx::Sqlite>,
+    path: &Utf8Path,
+    updated_playlists: &mut FxHashSet<i64>,
+) -> bool {
+    let affected_playlists = sqlx::query_scalar::<_, i64>(include_str!(
+        "../../../queries/scan/list_playlist_ids_for_track.sql"
+    ))
+    .bind(path.as_str())
+    .fetch_all(&mut **tx)
+    .await;
+
+    let affected_playlists = match affected_playlists {
+        Ok(ids) => ids,
+        Err(e) => {
+            error!(
+                "Database error while listing affected playlists for track cleanup: {:?}",
+                e
+            );
+            return false;
+        }
+    };
+
+    let playlist_result = sqlx::query(include_str!(
+        "../../../queries/scan/delete_playlist_items_for_track.sql"
+    ))
+    .bind(path.as_str())
+    .execute(&mut **tx)
+    .await;
+
+    if let Err(e) = playlist_result {
+        error!(
+            "Database error while deleting playlist items for track: {:?}",
+            e
+        );
+        return false;
+    }
+    updated_playlists.extend(affected_playlists);
+
+    let lyrics_result = sqlx::query(include_str!(
+        "../../../queries/scan/delete_lyrics_for_track.sql"
+    ))
+    .bind(path.as_str())
+    .execute(&mut **tx)
+    .await;
+
+    if let Err(e) = lyrics_result {
+        error!("Database error while deleting lyrics for track: {:?}", e);
+        return false;
+    }
+
+    let track_result = sqlx::query(include_str!("../../../queries/scan/delete_track.sql"))
+        .bind(path.as_str())
+        .execute(&mut **tx)
+        .await;
+
+    if let Err(e) = track_result {
+        error!("Database error while deleting track: {:?}", e);
+        false
+    } else {
+        true
+    }
 }
 
 /// Remove scan_record entries whose files no longer exist on disk, and delete the corresponding
@@ -205,48 +257,7 @@ pub async fn cleanup_with_exclusions(
     let mut deleted: Vec<Utf8PathBuf> = Vec::with_capacity(to_delete.len());
     for path in &to_delete {
         debug!("track deleted or moved: {:?}", path);
-        let affected_playlists = sqlx::query_scalar::<_, i64>(include_str!(
-            "../../../queries/scan/list_playlist_ids_for_track.sql"
-        ))
-        .bind(path.as_str())
-        .fetch_all(&mut *tx)
-        .await;
-
-        let affected_playlists = match affected_playlists {
-            Ok(ids) => ids,
-            Err(e) => {
-                error!(
-                    "Database error while listing affected playlists for track cleanup: {:?}",
-                    e
-                );
-                continue;
-            }
-        };
-
-        let playlist_result = sqlx::query(include_str!(
-            "../../../queries/scan/delete_playlist_items_for_track.sql"
-        ))
-        .bind(path.as_str())
-        .execute(&mut *tx)
-        .await;
-
-        if let Err(e) = playlist_result {
-            error!(
-                "Database error while deleting playlist items for track: {:?}",
-                e
-            );
-            continue;
-        }
-        updated_playlists.extend(affected_playlists);
-
-        let track_result = sqlx::query(include_str!("../../../queries/scan/delete_track.sql"))
-            .bind(path.as_str())
-            .execute(&mut *tx)
-            .await;
-
-        if let Err(e) = track_result {
-            error!("Database error while deleting track: {:?}", e);
-        } else {
+        if cleanup_track(&mut tx, path, &mut updated_playlists).await {
             deleted.push(path.clone());
         }
     }

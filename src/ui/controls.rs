@@ -8,8 +8,8 @@ use crate::{
         components::{
             context::context,
             icons::{
-                MENU, NEXT_TRACK, PAUSE, PLAY, PREV_TRACK, REPEAT, REPEAT_OFF, REPEAT_ONCE,
-                SHUFFLE, VOLUME, VOLUME_OFF, icon,
+                MENU, MICROPHONE, NEXT_TRACK, PAUSE, PLAY, PREV_TRACK, REPEAT, REPEAT_OFF,
+                REPEAT_ONCE, SHUFFLE, VOLUME, VOLUME_OFF, icon,
             },
             menu::{menu, menu_item},
         },
@@ -41,11 +41,11 @@ pub struct Controls {
 }
 
 impl Controls {
-    pub fn new(cx: &mut App, show_queue: Entity<bool>) -> Entity<Self> {
+    pub fn new(cx: &mut App, show_queue: Entity<bool>, show_lyrics: Entity<bool>) -> Entity<Self> {
         cx.new(|cx| Self {
             info_section: InfoSection::new(cx),
             scrubber: Scrubber::new(cx),
-            secondary_controls: SecondaryControls::new(cx, show_queue),
+            secondary_controls: SecondaryControls::new(cx, show_queue, show_lyrics),
         })
     }
 }
@@ -665,14 +665,75 @@ impl Render for Scrubber {
     }
 }
 
+#[derive(IntoElement)]
+struct SidebarToggleButton {
+    div: Stateful<Div>,
+    icon_path: &'static str,
+    active: bool,
+}
+
+impl StatefulInteractiveElement for SidebarToggleButton {}
+
+impl InteractiveElement for SidebarToggleButton {
+    fn interactivity(&mut self) -> &mut gpui::Interactivity {
+        self.div.interactivity()
+    }
+}
+
+impl Styled for SidebarToggleButton {
+    fn style(&mut self) -> &mut StyleRefinement {
+        self.div.style()
+    }
+}
+
+impl RenderOnce for SidebarToggleButton {
+    fn render(self, _: &mut Window, cx: &mut App) -> impl IntoElement {
+        let theme = cx.global::<Theme>();
+        let icon_color = if self.active {
+            theme.playback_button_toggled
+        } else {
+            theme.text
+        };
+
+        self.div
+            .rounded(px(3.0))
+            .w(px(25.0))
+            .h(px(25.0))
+            .mt(px(2.0))
+            .ml(px(3.0))
+            .flex()
+            .items_center()
+            .justify_center()
+            .border_color(theme.playback_button_border)
+            .bg(theme.playback_button)
+            .cursor_pointer()
+            .hover(|this| this.bg(theme.playback_button_hover))
+            .active(|this| this.bg(theme.playback_button_active))
+            .child(icon(self.icon_path).size(px(14.0)).text_color(icon_color))
+    }
+}
+
+fn sidebar_toggle_button(
+    id: impl Into<ElementId>,
+    icon_path: &'static str,
+    active: bool,
+) -> SidebarToggleButton {
+    SidebarToggleButton {
+        div: div().id(id.into()),
+        icon_path,
+        active,
+    }
+}
+
 pub struct SecondaryControls {
     info: PlaybackInfo,
     show_queue: Entity<bool>,
+    show_lyrics: Entity<bool>,
     replaygain_button: Entity<ReplayGainButton>,
 }
 
 impl SecondaryControls {
-    pub fn new(cx: &mut App, show_queue: Entity<bool>) -> Entity<Self> {
+    pub fn new(cx: &mut App, show_queue: Entity<bool>, show_lyrics: Entity<bool>) -> Entity<Self> {
         cx.new(|cx| {
             let info = cx.global::<PlaybackInfo>().clone();
             let volume = info.volume.clone();
@@ -685,6 +746,7 @@ impl SecondaryControls {
             Self {
                 info,
                 show_queue,
+                show_lyrics,
                 replaygain_button: ReplayGainButton::new(cx),
             }
         })
@@ -697,6 +759,9 @@ impl Render for SecondaryControls {
         let volume = *self.info.volume.read(cx);
         let prev_volume = *self.info.prev_volume.read(cx);
         let show_queue = self.show_queue.clone();
+        let show_lyrics = self.show_lyrics.clone();
+        let lyrics_active = *self.show_lyrics.read(cx);
+        let queue_active = *self.show_queue.read(cx);
 
         div().px(px(18.0)).flex().child(
             div()
@@ -760,28 +825,24 @@ impl Render for SecondaryControls {
                 )
                 .child(self.replaygain_button.clone())
                 .child(
-                    div()
-                        .rounded(px(3.0))
-                        .w(px(25.0))
-                        .h(px(25.0))
-                        .mt(px(2.0))
-                        .ml(px(3.0))
-                        .flex()
-                        .items_center()
-                        .justify_center()
-                        .border_color(theme.playback_button_border)
-                        .id("queue-button")
-                        .cursor_pointer()
-                        .bg(theme.playback_button)
-                        .hover(|this| this.bg(theme.playback_button_hover))
-                        .active(|this| this.bg(theme.playback_button_active))
-                        .child(icon(MENU).size(px(14.0)))
-                        .on_click(move |_, _, cx| {
+                    sidebar_toggle_button("queue-button", MENU, queue_active).on_click(
+                        move |_, _, cx| {
                             show_queue.update(cx, |m, cx| {
                                 *m = !*m;
                                 cx.notify();
                             })
-                        }),
+                        },
+                    ),
+                )
+                .child(
+                    sidebar_toggle_button("lyrics-button", MICROPHONE, lyrics_active).on_click(
+                        move |_, _, cx| {
+                            show_lyrics.update(cx, |m, cx| {
+                                *m = !*m;
+                                cx.notify();
+                            })
+                        },
+                    ),
                 ),
         )
     }

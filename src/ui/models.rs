@@ -26,8 +26,8 @@ use crate::{
     settings::{
         SettingsGlobal,
         storage::{
-            DEFAULT_QUEUE_WIDTH, DEFAULT_SIDEBAR_WIDTH, DEFAULT_SPLIT_WIDTH, StorageData,
-            TableSettings,
+            DEFAULT_LYRICS_HEIGHT, DEFAULT_QUEUE_WIDTH, DEFAULT_SIDEBAR_WIDTH, DEFAULT_SPLIT_WIDTH,
+            StorageData, TableSettings,
         },
     },
     ui::{app::get_dirs, data::Decode},
@@ -67,6 +67,7 @@ pub struct Models {
     pub table_settings: Entity<std::collections::HashMap<String, TableSettings>>,
     pub liked_tracks_sort_method: Entity<LikedTrackSortMethod>,
     pub sidebar_collapsed: Entity<bool>,
+    pub lyrics_height: Entity<Pixels>,
 }
 
 impl Global for Models {}
@@ -266,6 +267,13 @@ pub fn build_models(cx: &mut App, queue: Queue, storage_data: &StorageData) {
     let table_settings = cx.new(|_| storage_data.table_settings.clone());
     let liked_tracks_sort_method = cx.new(|_| storage_data.liked_tracks_sort_method);
     let sidebar_collapsed: Entity<bool> = cx.new(|_| storage_data.sidebar_collapsed);
+    let lyrics_height: Entity<Pixels> = cx.new(|_| {
+        if storage_data.lyrics_height > 0.0 {
+            storage_data.lyrics_height()
+        } else {
+            DEFAULT_LYRICS_HEIGHT
+        }
+    });
 
     cx.set_global(Models {
         metadata,
@@ -284,6 +292,7 @@ pub fn build_models(cx: &mut App, queue: Queue, storage_data: &StorageData) {
         table_settings,
         liked_tracks_sort_method,
         sidebar_collapsed,
+        lyrics_height,
     });
 
     let position: Entity<u64> = cx.new(|_| 0);

@@ -36,4 +36,6 @@ pub struct Metadata {
     pub replaygain_track_peak: Option<f64>,
     pub replaygain_album_gain: Option<f64>,
     pub replaygain_album_peak: Option<f64>,
+
+    pub lyrics: Option<String>,
 }

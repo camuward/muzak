@@ -41,7 +41,7 @@ use super::{
     header::Header,
     library::Library,
     models::{self, Models, PlaybackInfo, build_models},
-    queue::Queue,
+    right_sidebar::RightSidebar,
     search::SearchView,
     theme::setup_theme,
     util::drop_image_from_app,
@@ -49,11 +49,12 @@ use super::{
 
 struct WindowShadow {
     pub controls: Entity<Controls>,
-    pub queue: Entity<Queue>,
+    pub right_sidebar: Entity<RightSidebar>,
     pub library: Entity<Library>,
     pub header: Entity<Header>,
     pub search: Entity<SearchView>,
     pub show_queue: Entity<bool>,
+    pub show_lyrics: Entity<bool>,
     pub show_about: Entity<bool>,
     pub missing_folder_dialog: Entity<MissingFolderDialog>,
     pub palette: Entity<CommandPalette>,
@@ -62,13 +63,14 @@ struct WindowShadow {
 
 impl Render for WindowShadow {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let queue = self.queue.clone();
+        let right_sidebar = self.right_sidebar.clone();
         let show_about = *self.show_about.clone().read(cx);
         let scan_state = cx.global::<Models>().scan_state.read(cx).clone();
         let show_missing_folder_dialog = matches!(
             scan_state,
             ScanEvent::WaitingForMissingFolderDecision { .. }
         );
+        let show_sidebar = *self.show_queue.read(cx) || *self.show_lyrics.read(cx);
 
         div()
             .image_cache(self.image_cache.clone())
@@ -105,7 +107,7 @@ impl Render for WindowShadow {
                             .max_h_full()
                             .overflow_hidden()
                             .child(self.library.clone())
-                            .when(*self.show_queue.read(cx), |this| this.child(queue)),
+                            .when(show_sidebar, |this| this.child(right_sidebar)),
                     )
                     .child(self.header.clone())
                     .child(self.search.clone())
@@ -320,6 +322,7 @@ pub fn run() -> anyhow::Result<()> {
                             let sidebar_width = cx.global::<Models>().sidebar_width.clone();
                             let queue_width = cx.global::<Models>().queue_width.clone();
                             let split_width = cx.global::<Models>().split_width.clone();
+                            let lyrics_height = cx.global::<Models>().lyrics_height.clone();
                             let table_settings = cx.global::<Models>().table_settings.clone();
                             let liked_tracks_sort_method =
                                 cx.global::<Models>().liked_tracks_sort_method.clone();
@@ -330,6 +333,7 @@ pub fn run() -> anyhow::Result<()> {
                                 let sidebar_width: f32 = (*sidebar_width.read(cx)).into();
                                 let queue_width: f32 = (*queue_width.read(cx)).into();
                                 let split_width: f32 = (*split_width.read(cx)).into();
+                                let lyrics_height: f32 = (*lyrics_height.read(cx)).into();
                                 let table_settings = table_settings.read(cx).clone();
                                 let liked_tracks_sort_method = *liked_tracks_sort_method.read(cx);
                                 let sidebar_collapsed = *sidebar_collapsed.read(cx);
@@ -341,6 +345,7 @@ pub fn run() -> anyhow::Result<()> {
                                         sidebar_width,
                                         queue_width,
                                         split_width,
+                                        lyrics_height,
                                         table_settings,
                                         liked_tracks_sort_method,
                                         sidebar_collapsed,
@@ -351,6 +356,7 @@ pub fn run() -> anyhow::Result<()> {
                         .detach();
 
                         let show_queue = cx.new(|_| true);
+                        let show_lyrics = cx.new(|_| false);
                         let show_about = cx.global::<Models>().show_about.clone();
 
                         cx.observe(&show_about, |_, _, cx| {
@@ -359,12 +365,17 @@ pub fn run() -> anyhow::Result<()> {
                         .detach();
 
                         WindowShadow {
-                            controls: Controls::new(cx, show_queue.clone()),
-                            queue: Queue::new(cx, show_queue.clone()),
+                            controls: Controls::new(cx, show_queue.clone(), show_lyrics.clone()),
+                            right_sidebar: RightSidebar::new(
+                                cx,
+                                show_queue.clone(),
+                                show_lyrics.clone(),
+                            ),
                             library: Library::new(cx),
                             header: Header::new(cx),
                             search: SearchView::new(cx),
                             show_queue,
+                            show_lyrics,
                             show_about,
                             missing_folder_dialog: MissingFolderDialog::new(cx),
                             palette,

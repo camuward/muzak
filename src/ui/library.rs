@@ -20,7 +20,7 @@ use crate::{
     ui::{
         command_palette::{Command, CommandManager},
         components::{
-            resizable_sidebar::{ResizeSide, resizable_sidebar},
+            resizable::{ResizeEdge, resizable},
             table::table_data::TABLE_MAX_WIDTH,
         },
         library::{
@@ -520,11 +520,11 @@ impl Render for Library {
                 .mr_auto()
                 .overflow_hidden()
                 .child(
-                    resizable_sidebar("split-resizable", effective_entity, ResizeSide::Right)
+                    resizable("split-resizable", effective_entity, ResizeEdge::Right)
                         .border_width(px(2.0))
-                        .min_width(px(250.0))
-                        .max_width(dynamic_max)
-                        .default_width(DEFAULT_SPLIT_WIDTH)
+                        .min_size(px(250.0))
+                        .max_size(dynamic_max)
+                        .default_size(DEFAULT_SPLIT_WIDTH)
                         .h_full()
                         .child(
                             div()

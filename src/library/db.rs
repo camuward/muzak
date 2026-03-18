@@ -613,6 +613,17 @@ pub async fn get_all_tracks(pool: &SqlitePool) -> sqlx::Result<Vec<(String, i64,
     Ok(tracks)
 }
 
+pub async fn lyrics_for_track(pool: &SqlitePool, track_id: i64) -> sqlx::Result<Option<String>> {
+    let query = include_str!("../../queries/library/get_lyrics_by_track_id.sql");
+
+    let row: Option<(String,)> = sqlx::query_as(query)
+        .bind(track_id)
+        .fetch_optional(pool)
+        .await?;
+
+    Ok(row.map(|(content,)| content))
+}
+
 pub trait LibraryAccess {
     fn list_albums(&self, sort_method: AlbumSortMethod) -> sqlx::Result<Vec<(u32, String)>>;
     // TODO: handle this better
@@ -652,6 +663,7 @@ pub trait LibraryAccess {
     fn get_all_tracks_by_artist(&self, artist_id: i64) -> sqlx::Result<Arc<Vec<Track>>>;
     fn artist_id_for_album(&self, album_id: i64) -> sqlx::Result<i64>;
     fn get_all_tracks(&self) -> sqlx::Result<Vec<(String, i64, i64)>>;
+    fn lyrics_for_track(&self, track_id: i64) -> sqlx::Result<Option<String>>;
 }
 
 impl LibraryAccess for App {
@@ -802,5 +814,10 @@ impl LibraryAccess for App {
     fn get_all_tracks(&self) -> sqlx::Result<Vec<(String, i64, i64)>> {
         let pool: &Pool = self.global();
         crate::RUNTIME.block_on(get_all_tracks(&pool.0))
+    }
+
+    fn lyrics_for_track(&self, track_id: i64) -> sqlx::Result<Option<String>> {
+        let pool: &Pool = self.global();
+        crate::RUNTIME.block_on(lyrics_for_track(&pool.0, track_id))
     }
 }
