@@ -32,7 +32,7 @@ It is expected that new code works on all three major platforms (Linux, macOS, a
 If you think it's likely that your code will not work on a particular platform, please reach out to me (@143mailliw) when opening your pull request. I can fill in the gaps.
 
 ### Generative AI usage
-Contributionss generated with the assistance of AI will be accepted, *given that the following criteria are met:*
+Contributions generated with the assistance of AI will be accepted, *given that the following criteria are met:*
 
 - The contribution meets all of the previously listed standards (e.g. it doesn't introduce new warnings or errors, the code works without issue, documentation is concise and sensible, code is correctly formatted)
 - The use of generative AI is clearly disclosed with one or more of the following:
