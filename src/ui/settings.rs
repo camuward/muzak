@@ -4,9 +4,10 @@ mod playback;
 
 use cntp_i18n::tr;
 use gpui::{
-    App, AppContext, Context, Entity, IntoElement, ParentElement, Render, SharedString,
-    StatefulInteractiveElement, Styled, TitlebarOptions, Window, WindowBackgroundAppearance,
-    WindowBounds, WindowDecorations, WindowKind, WindowOptions, div, prelude::FluentBuilder, px,
+    App, AppContext, Context, Entity, InteractiveElement, IntoElement, ParentElement, Render,
+    ScrollHandle, SharedString, StatefulInteractiveElement, Styled, TitlebarOptions, Window,
+    WindowBackgroundAppearance, WindowBounds, WindowDecorations, WindowKind, WindowOptions, div,
+    prelude::FluentBuilder, px,
 };
 
 use crate::{
@@ -14,6 +15,7 @@ use crate::{
     ui::{
         components::{
             icons::{BOOKS, PLAY, WORLD},
+            scrollbar::{RightPad, floating_scrollbar},
             sidebar::{sidebar, sidebar_item},
             window_chrome::window_chrome,
             window_header::header,
@@ -66,6 +68,7 @@ enum SettingsSection {
 
 struct SettingsWindow {
     active: SettingsSection,
+    scroll_handle: ScrollHandle,
 }
 
 impl SettingsWindow {
@@ -73,6 +76,7 @@ impl SettingsWindow {
         let interface = interface::InterfaceSettings::new(cx);
         cx.new(|_| Self {
             active: SettingsSection::Interface(interface),
+            scroll_handle: ScrollHandle::new(),
         })
     }
 }
@@ -81,26 +85,12 @@ impl Render for SettingsWindow {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let theme = cx.global::<Theme>();
         let active = &self.active;
+        let scroll_handle = self.scroll_handle.clone();
 
         let content = match active {
-            SettingsSection::Interface(interface) => div()
-                .flex()
-                .flex_col()
-                .gap(px(12.0))
-                .child(interface.clone())
-                .into_any_element(),
-            SettingsSection::Library(library) => div()
-                .flex()
-                .flex_col()
-                .gap(px(12.0))
-                .child(library.clone())
-                .into_any_element(),
-            SettingsSection::Playback(playback) => div()
-                .flex()
-                .flex_col()
-                .gap(px(12.0))
-                .child(playback.clone())
-                .into_any_element(),
+            SettingsSection::Interface(interface) => interface.clone().into_any_element(),
+            SettingsSection::Library(library) => library.clone().into_any_element(),
+            SettingsSection::Playback(playback) => playback.clone().into_any_element(),
         };
 
         window_chrome(
@@ -108,8 +98,9 @@ impl Render for SettingsWindow {
                 div()
                     .flex()
                     .flex_row()
-                    .flex_shrink_0()
+                    .flex_shrink()
                     .flex_grow()
+                    .min_h(px(0.0))
                     .child(
                         sidebar()
                             .width(DEFAULT_SIDEBAR_WIDTH)
@@ -128,10 +119,15 @@ impl Render for SettingsWindow {
                                 sidebar_item("interface")
                                     .icon(WORLD)
                                     .child(tr!("INTERFACE", "Interface"))
-                                    .on_click(cx.listener(|this, _, _, cx| {
-                                        this.active =
-                                            SettingsSection::Interface(InterfaceSettings::new(cx));
-                                        cx.notify();
+                                    .on_click(cx.listener({
+                                        let scroll_handle = self.scroll_handle.clone();
+                                        move |this, _, _, cx| {
+                                            this.active = SettingsSection::Interface(
+                                                InterfaceSettings::new(cx),
+                                            );
+                                            scroll_handle.scroll_to_top_of_item(0);
+                                            cx.notify();
+                                        }
                                     }))
                                     .when(
                                         matches!(active, SettingsSection::Interface(_)),
@@ -142,11 +138,15 @@ impl Render for SettingsWindow {
                                 sidebar_item("library")
                                     .icon(BOOKS)
                                     .child(tr!("LIBRARY", "Library"))
-                                    .on_click(cx.listener(|this, _, _, cx| {
-                                        this.active =
-                                            SettingsSection::Library(LibrarySettings::new(cx));
-                                        cx.notify();
-                                    }))
+                                    .on_click({
+                                        let scroll_handle = self.scroll_handle.clone();
+                                        cx.listener(move |this, _, _, cx| {
+                                            this.active =
+                                                SettingsSection::Library(LibrarySettings::new(cx));
+                                            scroll_handle.scroll_to_top_of_item(0);
+                                            cx.notify();
+                                        })
+                                    })
                                     .when(matches!(active, SettingsSection::Library(_)), |this| {
                                         this.active()
                                     }),
@@ -155,11 +155,16 @@ impl Render for SettingsWindow {
                                 sidebar_item("playback")
                                     .icon(PLAY)
                                     .child(tr!("PLAYBACK", "Playback"))
-                                    .on_click(cx.listener(|this, _, _, cx| {
-                                        this.active =
-                                            SettingsSection::Playback(PlaybackSettings::new(cx));
-                                        cx.notify();
-                                    }))
+                                    .on_click({
+                                        let scroll_handle = self.scroll_handle.clone();
+                                        cx.listener(move |this, _, _, cx| {
+                                            this.active = SettingsSection::Playback(
+                                                PlaybackSettings::new(cx),
+                                            );
+                                            scroll_handle.scroll_to_top_of_item(0);
+                                            cx.notify();
+                                        })
+                                    })
                                     .when(matches!(active, SettingsSection::Playback(_)), |this| {
                                         this.active()
                                     }),
@@ -167,13 +172,27 @@ impl Render for SettingsWindow {
                     )
                     .child(
                         div()
+                            .relative()
                             .flex()
-                            .flex_col()
                             .flex_grow()
                             .flex_shrink()
+                            .min_h(px(0.0))
                             .overflow_hidden()
-                            .p(px(16.0))
-                            .child(content),
+                            .child(
+                                div()
+                                    .id("settings-content-scroll")
+                                    .w_full()
+                                    .overflow_y_scroll()
+                                    .track_scroll(&scroll_handle)
+                                    .flex_shrink()
+                                    .overflow_x_hidden()
+                                    .child(div().w_full().p(px(16.0)).child(content)),
+                            )
+                            .child(floating_scrollbar(
+                                "settings-scrollbar",
+                                scroll_handle,
+                                RightPad::Pad,
+                            )),
                     ),
             ),
         )
