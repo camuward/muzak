@@ -168,6 +168,8 @@ impl Render for Lyrics {
                         let emphasis = self.line_emphasis_for(idx);
                         let is_active = emphasis > 0.0 || Some(idx) == active_line;
                         let text_color = lerp_color(muted, normal, emphasis);
+                        let font_size = lerp(LYRICS_BASE_TEXT_SIZE, LYRICS_ACTIVE_TEXT_SIZE, emphasis);
+                        let width_fraction = font_size / LYRICS_ACTIVE_TEXT_SIZE;
                         div()
                             .id(("lyric", idx))
                             .on_click(move |_, _, cx| {
@@ -176,17 +178,14 @@ impl Render for Lyrics {
                                 interface.seek(time_ms as f64 / 1000_f64 + 0.1);
                             })
                             .cursor_pointer()
+                            .max_w(relative(width_fraction))
                             .px(px(20.0))
                             .py(px(lerp(
                                 LYRICS_BASE_VERTICAL_PADDING,
                                 LYRICS_ACTIVE_VERTICAL_PADDING,
                                 emphasis,
                             )))
-                            .text_size(px(lerp(
-                                LYRICS_BASE_TEXT_SIZE,
-                                LYRICS_ACTIVE_TEXT_SIZE,
-                                emphasis,
-                            )))
+                            .text_size(px(font_size))
                             .line_height(rems(lerp(
                                 LYRICS_BASE_LINE_HEIGHT,
                                 LYRICS_ACTIVE_LINE_HEIGHT,
