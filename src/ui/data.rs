@@ -53,6 +53,7 @@ fn read_metadata(path: &Path) -> anyhow::Result<QueueItemUIData> {
         artist_name: artist.as_ref().map(Into::into),
         source: DataSource::Metadata,
         image: None,
+        duration: stream.duration_secs().ok().map(|s| s as i64),
     };
 
     match stream.read_image() {

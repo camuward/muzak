@@ -206,9 +206,11 @@ impl Render for QueueItem {
                                 .line_height(rems(1.0))
                                 .text_size(px(15.0))
                                 .gap_1()
+                                .w_full()
                                 .overflow_x_hidden()
                                 .child(
                                     div()
+                                        .w_full()
                                         .text_ellipsis()
                                         .font_weight(FontWeight::EXTRA_BOLD)
                                         .child(
@@ -218,11 +220,35 @@ impl Render for QueueItem {
                                         ),
                                 )
                                 .child(
-                                    div().text_ellipsis().child(
-                                        item.artist_name
-                                            .clone()
-                                            .unwrap_or_else(|| tr!("UNKNOWN_ARTIST").into()),
-                                    ),
+                                    div()
+                                        .overflow_x_hidden()
+                                        .flex()
+                                        .w_full()
+                                        .max_w_full()
+                                        .justify_between()
+                                        .child(
+                                            div()
+                                                .text_ellipsis()
+                                                .overflow_x_hidden()
+                                                .flex_shrink()
+                                                .child(item.artist_name.clone().unwrap_or_else(
+                                                    || tr!("UNKNOWN_ARTIST").into(),
+                                                )),
+                                        )
+                                        .when_some(item.duration, |child, duration| {
+                                            child.child(
+                                                div()
+                                                    .flex_shrink_0()
+                                                    .ml(px(6.0))
+                                                    .font_weight(FontWeight::SEMIBOLD)
+                                                    .text_color(theme.text_secondary)
+                                                    .child(format!(
+                                                        "{:02}:{:02}",
+                                                        duration / 60,
+                                                        duration % 60
+                                                    )),
+                                            )
+                                        }),
                                 ),
                         ),
                 )

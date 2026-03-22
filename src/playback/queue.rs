@@ -69,6 +69,8 @@ pub struct QueueItemUIData {
     pub artist_name: Option<SharedString>,
     /// Whether the track's metadata is known from the file or the database.
     pub source: DataSource,
+    /// The duration of the track in seconds.
+    pub duration: Option<i64>,
 }
 
 #[derive(Clone, Debug, PartialEq, Copy)]
@@ -123,6 +125,7 @@ impl QueueItemData {
                 name: None,
                 artist_name: None,
                 source: DataSource::Library,
+                duration: None,
             });
 
             // if the database ids are known we can get the data from the database
@@ -134,6 +137,7 @@ impl QueueItemData {
                 if let (Ok(track), Ok(album)) = (track, album) {
                     m.as_mut().unwrap().name = Some(track.title.clone().into());
                     m.as_mut().unwrap().image = album.thumb.clone().map(|v| v.0);
+                    m.as_mut().unwrap().duration = Some(track.duration);
 
                     if let Ok(artist_name) = cx.get_artist_name_by_id(album.artist_id) {
                         m.as_mut().unwrap().artist_name = Some((*artist_name).clone().into());
