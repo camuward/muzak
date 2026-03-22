@@ -119,6 +119,7 @@ impl SymphoniaStream {
     fn break_metadata(&mut self, tags: &[Tag]) {
         let id3_position_in_set_regex = Regex::new(r"(\d+)/(\d+)").unwrap();
         let vinyl_track_regex = Regex::new(r"(?i)^([A-Z])(\d+)$").unwrap();
+        let disc_subtitle_regex = Regex::new(r"Disc (\d+) (?:-|—|-) (.+)").unwrap();
 
         for tag in tags {
             match tag.std_key {
@@ -213,6 +214,16 @@ impl SymphoniaStream {
                             }
                             if let Some(total) = captures.get(2) {
                                 self.current_metadata.disc_max = total.as_str().parse().ok();
+                            }
+                        // try to capture disc subtitle if it's inside the disc tag for whatever reason
+                        // i think musicbee is responsible for this nonsense
+                        } else if let Some(captures) = disc_subtitle_regex.captures(v) {
+                            if let Some(disc) = captures.get(1) {
+                                self.current_metadata.disc_current = disc.as_str().parse().ok();
+                            }
+                            if let Some(subtitle) = captures.get(2) {
+                                self.current_metadata.disc_subtitle =
+                                    Some(subtitle.as_str().to_string());
                             }
                         } else {
                             self.current_metadata.disc_current = v.clone().parse().ok();
