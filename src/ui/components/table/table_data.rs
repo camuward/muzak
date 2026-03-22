@@ -12,6 +12,12 @@ pub enum TableDragData {
     Album(AlbumDragData),
 }
 
+/// Drag payload for column header reordering.
+#[derive(Clone, Debug)]
+pub struct ColumnReorderDrag {
+    pub source_index: usize,
+}
+
 // table layout constants
 pub const TABLE_MAX_WIDTH: f32 = 1000.0;
 pub const TABLE_IMAGE_COLUMN_WIDTH: f32 = 47.0;

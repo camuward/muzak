@@ -13,6 +13,7 @@ use crate::{
         caching::hummingbird_cache,
         components::{
             context::context,
+            drag_drop::DragPreview,
             icons::{CHEVRON_DOWN, CHEVRON_UP, GRID, GRID_INACTIVE, LIST, LIST_INACTIVE, icon},
             menu::{menu, menu_check_item},
             nav_button::nav_button,
@@ -29,7 +30,8 @@ use gpui::{prelude::FluentBuilder, *};
 use indexmap::IndexMap;
 use rustc_hash::{FxBuildHasher, FxHashMap};
 use table_data::{
-    Column, GridContext, TABLE_HEADER_GROUP, TABLE_IMAGE_COLUMN_WIDTH, TableData, TableSort,
+    Column, ColumnReorderDrag, GridContext, TABLE_HEADER_GROUP, TABLE_IMAGE_COLUMN_WIDTH,
+    TableData, TableSort,
 };
 use table_item::TableItem;
 
@@ -299,21 +301,57 @@ where
             return (default_columns, FxHashMap::default());
         };
 
+        let legacy_order: Vec<String>;
+
+        // load column order or derive from hidden_columns (legacy format)
+        let column_order: &[String] = if !settings.column_order.is_empty() {
+            &settings.column_order
+        } else if !settings.hidden_columns.is_empty() {
+            legacy_order = default_columns
+                .keys()
+                .filter(|c| {
+                    !settings
+                        .hidden_columns
+                        .contains(&c.get_column_name().to_string())
+                })
+                .map(|c| c.get_column_name().to_string())
+                .collect();
+            &legacy_order
+        } else {
+            return (default_columns, FxHashMap::default());
+        };
+
         let mut visible_columns = IndexMap::with_hasher(FxBuildHasher);
         let mut hidden_widths = FxHashMap::default();
 
-        for (col, default_width) in &default_columns {
-            let col_name = col.get_column_name();
+        for name in column_order {
+            if let Some((&col, &default_width)) = default_columns
+                .iter()
+                .find(|(c, _)| c.get_column_name() == name.as_str())
+            {
+                let width = settings
+                    .column_widths
+                    .get(name.as_str())
+                    .copied()
+                    .unwrap_or(default_width);
+                visible_columns.insert(col, width);
+            }
+        }
+
+        for (&col, &default_width) in &default_columns {
+            if visible_columns.contains_key(&col) {
+                continue;
+            }
             let width = settings
                 .column_widths
-                .get(col_name.as_str())
+                .get(col.get_column_name().as_ref())
                 .copied()
-                .unwrap_or(*default_width);
-
-            if settings.hidden_columns.contains(&col_name.to_string()) && col.is_hideable() {
-                hidden_widths.insert(*col, width);
+                .unwrap_or(default_width);
+            if col.is_hideable() {
+                hidden_widths.insert(col, width);
             } else {
-                visible_columns.insert(*col, width);
+                // Non-hideable columns always shown; append after ordered ones.
+                visible_columns.insert(col, width);
             }
         }
 
@@ -325,7 +363,6 @@ where
         let hidden = self.hidden_column_widths.read(cx);
 
         let mut column_widths = std::collections::HashMap::new();
-        let mut hidden_columns = Vec::new();
 
         for (col, width) in columns.iter() {
             column_widths.insert(col.get_column_name().to_string(), *width);
@@ -333,17 +370,36 @@ where
 
         for (col, width) in hidden.iter() {
             column_widths.insert(col.get_column_name().to_string(), *width);
-            hidden_columns.push(col.get_column_name().to_string());
         }
+
+        let column_order = columns
+            .iter()
+            .map(|(col, _)| col.get_column_name().to_string())
+            .collect();
 
         TableSettings {
             column_widths,
-            hidden_columns,
+            column_order,
             view_mode: match *self.view_mode.read(cx) {
                 TableViewMode::List => TableViewModeSetting::List,
                 TableViewMode::Grid => TableViewModeSetting::Grid,
             },
+            ..Default::default()
         }
+    }
+
+    fn reorder_column(&mut self, from: usize, to: usize, cx: &mut App) {
+        self.columns.update(cx, |cols, cx| {
+            let mut new_cols = (**cols).clone();
+            if from == to || from >= new_cols.len() || to >= new_cols.len() {
+                return;
+            }
+            if let Some((key, val)) = new_cols.shift_remove_index(from) {
+                new_cols.shift_insert(to, key, val);
+            }
+            *cols = Arc::new(new_cols);
+            cx.notify();
+        });
     }
 
     pub fn get_table_name() -> SharedString {
@@ -403,6 +459,8 @@ where
                     .border_color(theme.border_color),
             );
         }
+
+        let drop_background_color = theme.background_tertiary;
 
         for (i, column) in columns_read.iter().enumerate() {
             let is_last = i == column_count - 1;
@@ -471,6 +529,15 @@ where
 
                             cx.notify();
                         })
+                    }))
+                    .on_drag(ColumnReorderDrag { source_index: i }, move |_, _, _, cx| {
+                        DragPreview::new(cx, column_id.get_column_name())
+                    })
+                    .drag_over::<ColumnReorderDrag>(move |style, _, _, _| {
+                        style.bg(drop_background_color)
+                    })
+                    .on_drop(cx.listener(move |this, drag: &ColumnReorderDrag, _, cx| {
+                        this.reorder_column(drag.source_index, i, cx);
                     })),
             );
 

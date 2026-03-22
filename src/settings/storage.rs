@@ -54,7 +54,11 @@ pub enum TableViewModeSetting {
 pub struct TableSettings {
     #[serde(default)]
     pub column_widths: HashMap<String, f32>,
+    /// Visible columns in display order. Absent columns are treated as hidden.
     #[serde(default)]
+    pub column_order: Vec<String>,
+    /// Legacy field used to migrate old settings files.
+    #[serde(default, skip_serializing)]
     pub hidden_columns: Vec<String>,
     #[serde(default = "default_table_view_mode")]
     pub view_mode: TableViewModeSetting,
