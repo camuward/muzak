@@ -8,16 +8,18 @@ use rustc_hash::FxBuildHasher;
 use super::{Album, ArtistWithCounts, Track};
 use crate::{
     library::db::{AlbumMethod, AlbumSortMethod, ArtistSortMethod, LibraryAccess, TrackSortMethod},
-    ui::availability::{
-        album_has_available_tracks, artist_has_available_tracks, is_track_available,
-    },
-    ui::components::{
-        drag_drop::{AlbumDragData, TrackDragData},
-        table::table_data::{Column, GridContext, TableData, TableDragData, TableSort},
-    },
-    ui::library::context_menus::{
-        AlbumContextMenuContext, TrackContextMenuContext, album_menu_for_table,
-        track_menu_for_table,
+    ui::{
+        availability::{
+            album_has_available_tracks, artist_has_available_tracks, is_track_available,
+        },
+        components::{
+            drag_drop::{AlbumDragData, TrackDragData},
+            table::table_data::{Column, GridContext, TableData, TableDragData, TableSort},
+        },
+        library::context_menus::{
+            AlbumContextMenuContext, TrackContextMenuContext, album_menu_for_table,
+            play_album_next, play_track_next, track_menu_for_table,
+        },
     },
 };
 
@@ -194,6 +196,15 @@ impl TableData<AlbumColumn> for Album {
         _grid_context: GridContext,
     ) -> Option<(gpui::AnyElement, Option<gpui::AnyElement>)> {
         Some((album_menu_for_table(self, context), None))
+    }
+
+    fn handle_middle_mouse(
+        &self,
+        _window: &mut gpui::Window,
+        cx: &mut App,
+        _grid_context: GridContext,
+    ) {
+        play_album_next(cx, self);
     }
 
     fn supports_grid_view() -> bool {
@@ -464,6 +475,15 @@ impl TableData<TrackColumn> for Track {
             window,
             cx,
         ))
+    }
+
+    fn handle_middle_mouse(
+        &self,
+        _window: &mut gpui::Window,
+        cx: &mut App,
+        _grid_context: GridContext,
+    ) {
+        play_track_next(cx, self);
     }
 }
 

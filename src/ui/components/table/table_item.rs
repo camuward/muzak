@@ -106,21 +106,34 @@ where
             .w_full()
             .flex()
             .id(self.id.clone().unwrap_or("bad".into()))
-            .when_some(self.on_select.clone(), move |div, on_select| {
-                if is_available {
-                    div.on_click(move |_, _, cx| {
-                        let id = row_data.as_ref().unwrap().get_table_id();
-                        on_select(cx, &id)
-                    })
-                    .cursor_pointer()
-                    .hover(|this| this.bg(theme.nav_button_hover))
-                    .active(|this| this.bg(theme.nav_button_active))
-                } else {
-                    div.cursor_default().opacity(0.5)
+            .when_some(self.on_select.clone(), {
+                let row_data = row_data.clone();
+                move |div, on_select| {
+                    if is_available {
+                        div.on_click(move |_, _, cx| {
+                            let id = row_data.as_ref().unwrap().get_table_id();
+                            on_select(cx, &id)
+                        })
+                        .cursor_pointer()
+                        .hover(|this| this.bg(theme.nav_button_hover))
+                        .active(|this| this.bg(theme.nav_button_active))
+                    } else {
+                        div.cursor_default().opacity(0.5)
+                    }
                 }
             })
             .when(self.on_select.is_none() && !is_available, |this| {
                 this.opacity(0.5)
+            })
+            .on_aux_click({
+                let row_data = row_data.clone();
+                move |ev, window, cx| {
+                    if let Some(row_data) = row_data.as_ref()
+                        && ev.is_middle_click()
+                    {
+                        row_data.handle_middle_mouse(window, cx, GridContext::Table);
+                    }
+                }
             });
 
         row = match drag_data {

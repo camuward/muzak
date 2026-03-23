@@ -143,6 +143,10 @@ where
         None
     }
 
+    /// Optional middle mouse button handler for this row.
+    fn handle_middle_mouse(&self, _window: &mut Window, _cx: &mut App, _grid_context: GridContext) {
+    }
+
     /// Returns true if the table supports rendering as a grid view.
     fn supports_grid_view() -> bool {
         false
