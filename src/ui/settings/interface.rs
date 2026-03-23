@@ -44,6 +44,10 @@ fn get_available_languages() -> Vec<LanguageOption> {
             display_name: "Ελληνικά".into(),
         },
         LanguageOption {
+            code: "es",
+            display_name: "Español".into(),
+        },
+        LanguageOption {
             code: "en",
             display_name: "English".into(),
         },
