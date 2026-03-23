@@ -273,6 +273,7 @@ where
     fn build_display_list(
         matches: &[Arc<T>],
         expanded_categories: &[I18nString],
+        expand_all: bool,
     ) -> Vec<DisplayEntry<T>> {
         let mut category_order: Vec<I18nString> = Vec::new();
         let mut category_counts: Vec<usize> = Vec::new();
@@ -311,7 +312,7 @@ where
         for (cat_idx, cat) in category_order.iter().enumerate() {
             display_list.push(DisplayEntry::Header(cat.clone()));
             let total = category_counts[cat_idx];
-            let is_expanded = expanded_categories.iter().any(|c| c == cat);
+            let is_expanded = expand_all || expanded_categories.iter().any(|c| c == cat);
             let limit = if is_expanded || total <= MAX_VISIBLE_PER_CATEGORY {
                 total
             } else {
@@ -433,7 +434,7 @@ where
         let matches = self.get_matches();
         let curr_scroll = self.list_state.logical_scroll_top();
 
-        self.display_list = Self::build_display_list(&matches, &self.expanded_categories);
+        self.display_list = Self::build_display_list(&matches, &self.expanded_categories, self.query.is_empty());
 
         self.views_model = cx.new(|_| FxHashMap::default());
         self.render_counter = cx.new(|_| 0);
