@@ -35,6 +35,7 @@ pub struct MenuBuilder {
     name: SharedString,
     items: Vec<MenuItem>,
     macos_only: bool,
+    disabled: bool,
 }
 
 impl MenuBuilder {
@@ -43,6 +44,7 @@ impl MenuBuilder {
             name: name.into(),
             items: Vec::new(),
             macos_only: false,
+            disabled: false,
         }
     }
 
@@ -58,6 +60,11 @@ impl MenuBuilder {
         self
     }
 
+    pub fn disabled(mut self, disabled: bool) -> Self {
+        self.disabled = disabled;
+        self
+    }
+
     pub fn build(self) -> Option<Menu> {
         if self.macos_only && !cfg!(target_os = "macos") {
             return None;
@@ -66,6 +73,7 @@ impl MenuBuilder {
         Some(Menu {
             name: self.name,
             items: self.items,
+            disabled: self.disabled,
         })
     }
 

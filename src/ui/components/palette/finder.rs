@@ -2,7 +2,7 @@ use std::{marker::PhantomData, sync::Arc, time::Duration};
 
 use cntp_i18n::{I18nString, trn};
 use gpui::{
-    AnyElement, App, AppContext, Context, ElementId, Entity, EventEmitter, FontWeight,
+    AnyElement, App, AppContext, Context, Div, ElementId, Entity, EventEmitter, FontWeight,
     InteractiveElement, IntoElement, ListAlignment, ListState, ParentElement, Render, SharedString,
     StatefulInteractiveElement, Styled, WeakEntity, Window, div, img, list, prelude::FluentBuilder,
     px,
@@ -15,7 +15,10 @@ use rustc_hash::FxHashMap;
 use tokio::sync::mpsc::channel;
 use tracing::{debug, trace};
 
-use crate::ui::{components::input::EnrichedInputAction, theme::Theme};
+use crate::ui::{
+    components::{context::context, input::EnrichedInputAction},
+    theme::Theme,
+};
 
 const MAX_VISIBLE_PER_CATEGORY: usize = 5;
 
@@ -30,6 +33,9 @@ pub trait PaletteItem {
         None
     }
     fn on_middle_click(&self, _cx: &mut App) {}
+    fn context_menu(&self, _window: &mut Window, _cx: &mut App) -> Option<impl IntoElement> {
+        None::<Div>
+    }
 }
 
 #[derive(Clone)]
@@ -812,7 +818,7 @@ where
     MatcherFunc: Fn(&Arc<T>, &mut App) -> Utf32String + 'static,
     OnAccept: Fn(&Arc<T>, &mut App) + 'static,
 {
-    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let theme = cx.global::<Theme>();
 
         let weak_parent = self.weak_parent.clone();
@@ -820,7 +826,7 @@ where
         let on_accept_override = self.on_accept_override.clone();
         let is_enabled = self.is_enabled;
 
-        div()
+        let item = div()
             .px(px(10.0))
             .py(px(6.0))
             .flex()
@@ -916,6 +922,19 @@ where
                         .text_color(theme.text_secondary)
                         .child(right),
                 )
-            })
+            });
+
+        if let Some(context_menu) = self
+            .item_data
+            .as_ref()
+            .and_then(|v| v.context_menu(window, cx))
+        {
+            context((self.id.clone(), "context_menu"))
+                .with(item)
+                .child(context_menu)
+                .into_any_element()
+        } else {
+            item.into_any_element()
+        }
     }
 }

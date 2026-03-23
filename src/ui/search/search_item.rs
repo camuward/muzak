@@ -1,7 +1,7 @@
-use std::sync::Arc;
+use std::{rc::Rc, sync::Arc};
 
 use cntp_i18n::{I18nString, tr};
-use gpui::{App, SharedString};
+use gpui::{App, IntoElement, SharedString, Window};
 
 use crate::{
     library::db::{AlbumMethod, LibraryAccess},
@@ -10,7 +10,10 @@ use crate::{
             icons::{DISC, USERS},
             palette::{FinderItemLeft, PaletteItem},
         },
-        library::context_menus::{play_album_next, play_track_next},
+        library::context_menus::{
+            AlbumContextMenuContext, TrackContextMenuContext, album::AlbumContextMenu,
+            play_album_next, play_track_next, track::TrackContextMenu,
+        },
     },
 };
 
@@ -140,6 +143,59 @@ impl PaletteItem for SearchPaletteItem {
                 }
             }
             _ => (),
+        }
+    }
+
+    fn context_menu(&self, window: &mut Window, cx: &mut App) -> Option<impl IntoElement> {
+        match self {
+            SearchPaletteItem::Album { id, .. } => {
+                let album =
+                    window.use_keyed_state(("pi_context_album", *id as usize), cx, |_, cx| {
+                        cx.get_album_by_id(*id as i64, AlbumMethod::Metadata)
+                    });
+
+                if let Ok(album) = album.read(cx) {
+                    Some(
+                        AlbumContextMenu::new(
+                            Rc::new((**album).clone()),
+                            AlbumContextMenuContext {
+                                show_go_to_artist: true,
+                            },
+                        )
+                        .into_any_element(),
+                    )
+                } else {
+                    None
+                }
+            }
+            SearchPaletteItem::Track { id, .. } => {
+                let show_add_to =
+                    window.use_keyed_state(("pi_context_add_to", *id as usize), cx, |_, _| true);
+                let track =
+                    window.use_keyed_state(("pi_context_track", *id as usize), cx, |_, cx| {
+                        cx.get_track_by_id(*id)
+                    });
+
+                if let Ok(track) = track.read(cx) {
+                    Some(
+                        TrackContextMenu::new(
+                            Rc::new((**track).clone()),
+                            true,
+                            TrackContextMenuContext {
+                                show_go_to_album: true,
+                                show_go_to_artist: true,
+                                play_from_here: None,
+                            },
+                            None,
+                            show_add_to,
+                        )
+                        .into_any_element(),
+                    )
+                } else {
+                    None
+                }
+            }
+            _ => None,
         }
     }
 }
