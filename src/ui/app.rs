@@ -246,6 +246,10 @@ pub fn run() -> anyhow::Result<()> {
             dropdown::bind_actions(cx);
             popover::bind_actions(cx);
 
+            let settings_model = cx.global::<SettingsGlobal>().model.clone();
+            cx.observe(&settings_model, |_, cx| cx.refresh_windows())
+                .detach();
+
             if !language.is_empty() {
                 I18N_MANAGER.write().unwrap().locale = Locale::new_from_locale_identifier(language);
             }

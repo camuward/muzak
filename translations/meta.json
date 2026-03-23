@@ -199,7 +199,7 @@
   },
   "CLEAR_QUEUE": {
     "context": "queue.rs",
-    "definedIn": "src/ui/queue.rs:475",
+    "definedIn": "src/ui/queue.rs:489",
     "plural": false,
     "description": null
   },
@@ -325,13 +325,13 @@
   },
   "GO_TO_ALBUM": {
     "context": "queue.rs",
-    "definedIn": "src/ui/queue.rs:262",
+    "definedIn": "src/ui/queue.rs:275",
     "plural": false,
     "description": null
   },
   "GO_TO_ARTIST": {
     "context": "queue.rs",
-    "definedIn": "src/ui/queue.rs:279",
+    "definedIn": "src/ui/queue.rs:292",
     "plural": false,
     "description": null
   },
@@ -355,7 +355,19 @@
   },
   "INTERFACE": {
     "context": "settings.rs",
-    "definedIn": "src/ui/settings.rs:138",
+    "definedIn": "src/ui/settings.rs:88",
+    "plural": false,
+    "description": null
+  },
+  "INTERFACE_ALWAYS_SHOW_SCROLLBARS": {
+    "context": "interface.rs",
+    "definedIn": "src/ui/settings/interface.rs:275",
+    "plural": false,
+    "description": null
+  },
+  "INTERFACE_ALWAYS_SHOW_SCROLLBARS_SUBTEXT": {
+    "context": "interface.rs",
+    "definedIn": "src/ui/settings/interface.rs:278",
     "plural": false,
     "description": null
   },
@@ -427,7 +439,7 @@
   },
   "LIBRARY": {
     "context": "settings.rs",
-    "definedIn": "src/ui/settings.rs:157",
+    "definedIn": "src/ui/settings.rs:89",
     "plural": false,
     "description": null
   },
@@ -493,7 +505,7 @@
   },
   "PLAYBACK": {
     "context": "settings.rs",
-    "definedIn": "src/ui/settings.rs:176",
+    "definedIn": "src/ui/settings.rs:90",
     "plural": false,
     "description": null
   },
@@ -547,7 +559,7 @@
   },
   "QUEUE_TITLE": {
     "context": "queue.rs",
-    "definedIn": "src/ui/queue.rs:460",
+    "definedIn": "src/ui/queue.rs:474",
     "plural": false,
     "description": null
   },
@@ -577,7 +589,7 @@
   },
   "REMOVE_FROM_QUEUE": {
     "context": "queue.rs",
-    "definedIn": "src/ui/queue.rs:311",
+    "definedIn": "src/ui/queue.rs:324",
     "plural": false,
     "description": null
   },
@@ -841,13 +853,13 @@
   },
   "SHUFFLE": {
     "context": "queue.rs",
-    "definedIn": "src/ui/queue.rs:489",
+    "definedIn": "src/ui/queue.rs:503",
     "plural": false,
     "description": null
   },
   "SHUFFLING": {
     "context": "queue.rs",
-    "definedIn": "src/ui/queue.rs:488",
+    "definedIn": "src/ui/queue.rs:502",
     "plural": false,
     "description": null
   },
