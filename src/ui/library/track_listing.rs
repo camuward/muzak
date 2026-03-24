@@ -45,7 +45,8 @@ impl TrackListing {
             .map(|n| format!("{}", n).into());
 
         Self {
-            tracks: Arc::new(
+            tracks: Arc::new({
+                let tracks_for_closure = tracks.clone();
                 tracks
                     .iter()
                     .enumerate()
@@ -53,7 +54,11 @@ impl TrackListing {
                         TrackItem::new(
                             cx,
                             track.clone(),
-                            index == 0 || track.track_number == Some(1),
+                            index == 0
+                                || track.track_number == Some(1)
+                                || tracks_for_closure
+                                    .get(index - 1)
+                                    .map_or(false, |t| t.disc_number != track.disc_number),
                             artist_name_visibility.clone(),
                             TrackItemLeftField::TrackNum,
                             None,
@@ -64,8 +69,8 @@ impl TrackListing {
                             show_go_to_artist,
                         )
                     })
-                    .collect(),
-            ),
+                    .collect()
+            }),
             original_tracks: tracks,
             track_list_state: state,
         }
