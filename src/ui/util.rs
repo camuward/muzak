@@ -1,5 +1,6 @@
-use std::sync::Arc;
+use std::{path::Path, sync::Arc};
 
+use globwalk::GlobWalkerBuilder;
 use gpui::{
     AnyElement, App, Bounds, Element, ElementId, Entity, GlobalElementId, InspectorElementId,
     IntoElement, LayoutId, ParentElement, Pixels, Render, RenderImage, Stateful, StyleRefinement,
@@ -217,4 +218,18 @@ where
             MaybeStateful::NotStateful(not_stateful) => not_stateful.extend(elements),
         }
     }
+}
+
+pub fn find_art_file_for_path(path: &Path) -> Option<Arc<Path>> {
+    let parent = path.parent()?;
+
+    let mut glob =
+        GlobWalkerBuilder::from_patterns(&parent, &["{folder,cover,front}.{jpg,jpeg,png}"])
+            .case_insensitive(true)
+            .max_depth(1)
+            .build()
+            .expect("Failed to build album art glob")
+            .filter_map(|e| e.ok());
+
+    return glob.next().map(|e| Arc::from(e.path()));
 }

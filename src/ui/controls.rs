@@ -5,6 +5,7 @@ use crate::{
     playback::{events::RepeatState, interface::PlaybackInterface, thread::PlaybackState},
     settings::SettingsGlobal,
     ui::{
+        caching::hummingbird_cache,
         components::{
             context::context,
             icons::{
@@ -18,7 +19,7 @@ use crate::{
             info_section::InfoSectionContextMenu, resolve_library_track_by_path,
         },
         models::CurrentTrack,
-        util::drop_image_from_app,
+        util::{drop_image_from_app, find_art_file_for_path},
     },
 };
 use cntp_i18n::tr;
@@ -120,7 +121,20 @@ impl InfoSection {
                 let image = m.read(cx).clone();
                 let old_image = this.albumart_actual.take();
 
-                this.albumart_actual = image.map(ImageSource::Render);
+                if let Some(image) = image {
+                    // still load the thumbnail, even though we load the full quality artwork
+                    // needs to be done because our thumbnail is better downscaled than GPUI will
+                    // do on it's own
+                    this.albumart_actual = Some(ImageSource::Render(image));
+                } else {
+                    // attempt to find cover image in fs
+                    this.albumart_actual = this
+                        .current_track_path
+                        .as_ref()
+                        .and_then(|path| find_art_file_for_path(path))
+                        .map(|path| ImageSource::Resource(Resource::Path(path)));
+                }
+
                 cx.notify();
 
                 if let Some(ImageSource::Render(img)) = old_image {
@@ -133,7 +147,17 @@ impl InfoSection {
                 let image = m.read(cx).clone();
                 let old_image = this.albumart_original.take();
 
-                this.albumart_original = image.clone().map(ImageSource::Render);
+                if let Some(image) = image {
+                    this.albumart_original = Some(ImageSource::Render(image));
+                } else {
+                    // attempt to find cover image in fs
+                    this.albumart_original = this
+                        .current_track_path
+                        .as_ref()
+                        .and_then(|path| find_art_file_for_path(path))
+                        .map(|path| ImageSource::Resource(Resource::Path(path)));
+                }
+
                 cx.notify();
 
                 if let Some(ImageSource::Render(img)) = old_image {
@@ -185,117 +209,120 @@ impl Render for InfoSection {
 
         let theme = cx.global::<Theme>();
         let state = self.playback_info.playback_state.read(cx);
-        let content =
-            div()
-                .id("info-section")
-                .flex()
-                .w(px(275.0))
-                .min_w(px(275.0))
-                .max_w(px(275.0))
-                .overflow_x_hidden()
-                .flex_shrink_0()
-                .child(
-                    div()
-                        .mx(px(12.0))
-                        .mt(px(12.0))
-                        .mb(px(6.0))
-                        .gap(px(10.0))
-                        .flex()
-                        .overflow_x_hidden()
-                        .child(
+        let content = div()
+            .id("info-section")
+            .flex()
+            .w(px(275.0))
+            .min_w(px(275.0))
+            .max_w(px(275.0))
+            .overflow_x_hidden()
+            .flex_shrink_0()
+            .child(
+                div()
+                    .mx(px(12.0))
+                    .mt(px(12.0))
+                    .mb(px(6.0))
+                    .gap(px(10.0))
+                    .flex()
+                    .overflow_x_hidden()
+                    .child(
+                        div()
+                            .image_cache(hummingbird_cache("infosection_cache", 1))
+                            .id("album-art")
+                            .rounded(px(4.0))
+                            .bg(theme.album_art_background)
+                            .shadow_sm()
+                            .w(px(36.0))
+                            .h(px(36.0))
+                            .mb(px(6.0))
+                            .flex_shrink_0()
+                            .on_hover(cx.listener(|this, is_hovering: &bool, _, cx| {
+                                if this.is_hovering_art != *is_hovering {
+                                    this.is_hovering_art = *is_hovering;
+                                    cx.notify();
+                                }
+                            }))
+                            .when(self.albumart_actual.is_some(), |this: Stateful<Div>| {
+                                this.when(
+                                    self.is_hovering_art && self.albumart_original.is_some(),
+                                    |this: Stateful<Div>| {
+                                        this.child(
+                                            anchored().anchor(Corner::BottomRight).child(deferred(
+                                                div()
+                                                    .id("album-art-preview")
+                                                    .occlude()
+                                                    .pb(px(26.0))
+                                                    .child(
+                                                        img(self
+                                                            .albumart_original
+                                                            .clone()
+                                                            .unwrap())
+                                                        .w(px(256.0))
+                                                        .max_h(px(256.0))
+                                                        .rounded(px(10.0))
+                                                        .shadow_md(),
+                                                    ),
+                                            )),
+                                        )
+                                    },
+                                )
+                                .child(
+                                    img(self.albumart_actual.clone().unwrap())
+                                        .w(px(36.0))
+                                        .h(px(36.0))
+                                        .object_fit(ObjectFit::Fill)
+                                        .rounded(px(4.0)),
+                                )
+                            }),
+                    )
+                    .when(*state == PlaybackState::Stopped, |e| {
+                        e.child(
                             div()
-                                .id("album-art")
-                                .rounded(px(4.0))
-                                .bg(theme.album_art_background)
-                                .shadow_sm()
-                                .w(px(36.0))
-                                .h(px(36.0))
-                                .mb(px(6.0))
-                                .flex_shrink_0()
-                                .on_hover(cx.listener(|this, is_hovering: &bool, _, cx| {
-                                    if this.is_hovering_art != *is_hovering {
-                                        this.is_hovering_art = *is_hovering;
-                                        cx.notify();
-                                    }
-                                }))
-                                .when(self.albumart_actual.is_some(), |this: Stateful<Div>| {
-                                    this.when(
-                                        self.is_hovering_art && self.albumart_original.is_some(),
-                                        |this: Stateful<Div>| {
-                                            this.child(
-                                                anchored().anchor(Corner::TopLeft).child(deferred(
-                                                    div()
-                                                        .id("album-art-preview")
-                                                        .occlude()
-                                                        .pb(px(26.0))
-                                                        .child(
-                                                            img(self
-                                                                .albumart_original
-                                                                .clone()
-                                                                .unwrap())
-                                                            .w(px(256.0))
-                                                            .h(px(256.0))
-                                                            .rounded(px(10.0))
-                                                            .shadow_md(),
-                                                        ),
-                                                )),
-                                            )
-                                        },
-                                    )
-                                    .child(
-                                        img(self.albumart_actual.clone().unwrap())
-                                            .w(px(36.0))
-                                            .h(px(36.0))
-                                            .rounded(px(4.0)),
-                                    )
-                                }),
-                        )
-                        .when(*state == PlaybackState::Stopped, |e| {
-                            e.child(
-                                div()
-                                    .line_height(rems(1.0))
-                                    .font_weight(FontWeight::EXTRA_BOLD)
-                                    .text_size(px(15.0))
-                                    .flex()
-                                    .h_full()
-                                    .items_center()
-                                    .pb(px(6.0))
-                                    .child(tr!(
+                                .line_height(rems(1.0))
+                                .font_weight(FontWeight::EXTRA_BOLD)
+                                .text_size(px(15.0))
+                                .flex()
+                                .h_full()
+                                .items_center()
+                                .pb(px(6.0))
+                                .child(tr!(
                                     "APP_NAME",
                                     "Hummingbird",
                                     #description="Use the english name everywhere unless this \
                                         is strictly disagreeable.
                                 ")),
-                            )
-                        })
-                        .when(*state != PlaybackState::Stopped, |e| {
-                            e.child(
-                                div()
-                                    .flex()
-                                    .flex_col()
-                                    .line_height(rems(1.0))
-                                    .text_size(px(15.0))
-                                    .gap_1()
-                                    .w_full()
-                                    .overflow_x_hidden()
-                                    .w_full()
-                                    .child(
-                                        div()
-                                            .font_weight(FontWeight::EXTRA_BOLD)
-                                            .text_ellipsis()
-                                            .w_full()
-                                            .child(self.track_name.clone().unwrap_or(
-                                                tr!("UNKNOWN_TRACK", "Unknown Track").into(),
-                                            )),
-                                    )
-                                    .child(div().text_ellipsis().w_full().child(
+                        )
+                    })
+                    .when(*state != PlaybackState::Stopped, |e| {
+                        e.child(
+                            div()
+                                .flex()
+                                .flex_col()
+                                .line_height(rems(1.0))
+                                .text_size(px(15.0))
+                                .gap_1()
+                                .w_full()
+                                .overflow_x_hidden()
+                                .w_full()
+                                .child(
+                                    div()
+                                        .font_weight(FontWeight::EXTRA_BOLD)
+                                        .text_ellipsis()
+                                        .w_full()
+                                        .child(self.track_name.clone().unwrap_or(
+                                            tr!("UNKNOWN_TRACK", "Unknown Track").into(),
+                                        )),
+                                )
+                                .child(
+                                    div().text_ellipsis().w_full().child(
                                         self.artist_name.clone().unwrap_or(
                                             tr!("UNKNOWN_ARTIST", "Unknown Artist").into(),
                                         ),
-                                    )),
-                            )
-                        }),
-                );
+                                    ),
+                                ),
+                        )
+                    }),
+            );
 
         if self.current_track_path.is_some() || self.current_library_track.is_some() {
             let show_add_to = add_to_state.as_ref().map(|(s, _)| s.clone());
