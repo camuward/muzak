@@ -91,6 +91,15 @@ impl Discord {
 
         self.client.set_activity(activity.assets(assets)).ok();
     }
+
+    pub fn update_start_time(&mut self) {
+        self.start_time = Some(
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_secs(),
+        );
+    }
 }
 
 #[async_trait]
@@ -108,7 +117,10 @@ impl MediaMetadataBroadcastService for Discord {
 
     async fn metadata_recieved(&mut self, info: Arc<Metadata>) {
         self.metadata = Some(info.clone());
-        self.stage += 1;
+
+        if self.stage != 3 {
+            self.stage += 1;
+        }
 
         if self.last_state == PlaybackState::Playing && self.stage == 3 {
             self.update_activity();
@@ -120,12 +132,7 @@ impl MediaMetadataBroadcastService for Discord {
 
         match state {
             PlaybackState::Playing => {
-                self.start_time = Some(
-                    SystemTime::now()
-                        .duration_since(UNIX_EPOCH)
-                        .unwrap()
-                        .as_secs(),
-                );
+                self.update_start_time();
                 self.update_activity();
             }
             PlaybackState::Paused | PlaybackState::Stopped => {
@@ -137,6 +144,7 @@ impl MediaMetadataBroadcastService for Discord {
     async fn position_changed(&mut self, position: u64) {
         let last_position = self.last_position;
         self.last_position = position;
+        self.update_start_time();
 
         if (position > last_position + 1 || position < last_position)
             && self.last_state == PlaybackState::Playing
@@ -148,13 +156,11 @@ impl MediaMetadataBroadcastService for Discord {
 
     async fn duration_changed(&mut self, duration: u64) {
         self.last_duration = Some(duration);
-        self.stage += 1;
-        self.start_time = Some(
-            SystemTime::now()
-                .duration_since(UNIX_EPOCH)
-                .unwrap()
-                .as_secs(),
-        );
+        self.update_start_time();
+
+        if self.stage != 3 {
+            self.stage += 1;
+        }
 
         if self.last_state == PlaybackState::Playing && self.stage == 3 {
             self.update_activity();
