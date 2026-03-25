@@ -21,6 +21,7 @@ pub struct Discord {
     start_time: Option<u64>,
     last_position: u64,
     last_duration: Option<u64>,
+    last_state: PlaybackState,
     client: DiscordIpcClient,
 }
 
@@ -35,6 +36,7 @@ impl Discord {
             start_time: None,
             last_position: 0,
             last_duration: None,
+            last_state: PlaybackState::Stopped,
             client,
         }
     }
@@ -98,25 +100,29 @@ impl MediaMetadataBroadcastService for Discord {
         self.last_position = 0;
         self.last_path = Some(file_path.clone());
 
-        self.update_activity();
+        self.client.clear_activity().ok();
     }
 
     async fn metadata_recieved(&mut self, info: Arc<Metadata>) {
         self.metadata = Some(info.clone());
 
-        self.update_activity();
+        if self.last_state == PlaybackState::Playing {
+            self.update_activity();
+        }
     }
 
     async fn state_changed(&mut self, state: PlaybackState) {
+        self.last_state = state;
+
         match state {
             PlaybackState::Playing => {
-                self.update_activity();
                 self.start_time = Some(
                     SystemTime::now()
                         .duration_since(UNIX_EPOCH)
                         .unwrap()
                         .as_secs(),
                 );
+                self.update_activity();
             }
             PlaybackState::Paused | PlaybackState::Stopped => {
                 self.client.clear_activity().ok();
