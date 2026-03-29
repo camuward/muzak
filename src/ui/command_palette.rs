@@ -10,16 +10,18 @@ use rustc_hash::FxHashMap;
 use std::hash::Hash;
 use tracing::error;
 
+#[cfg(feature = "update")]
+use crate::ui::global_actions::CheckForUpdates;
 use crate::ui::{
     components::{
         modal::modal,
         palette::{FinderItemLeft, Palette, PaletteItem},
     },
-    global_actions::{About, ForceScan, Next, PlayPause, Previous, Quit, Search, Settings, ShuffleAll},
+    global_actions::{
+        About, ForceScan, Next, PlayPause, Previous, Quit, Search, Settings, ShuffleAll,
+    },
     troubleshooting::{CopyTroubleshootingInfo, OpenLog},
 };
-#[cfg(feature = "update")]
-use crate::ui::global_actions::CheckForUpdates;
 
 actions!(hummingbird, [OpenPalette]);
 

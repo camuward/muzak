@@ -82,7 +82,7 @@ pub fn register_actions(cx: &mut App) {
     #[cfg(feature = "update")]
     {
         app_menu = app_menu.add_item(menu_item(
-            tr!("ACTION_CHECK_FOR_UPDATES", "Check for Updates"),
+            tr!("ACTION_CHECK_FOR_UPDATES"),
             CheckForUpdates,
             false,
         ));

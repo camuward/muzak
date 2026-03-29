@@ -61,37 +61,37 @@
   },
   "ACTION_ABOUT": {
     "context": "command_palette.rs",
-    "definedIn": "src/ui/command_palette.rs:163",
+    "definedIn": "src/ui/command_palette.rs:165",
     "plural": false,
     "description": null
   },
   "ACTION_CHECK_FOR_UPDATES": {
-    "context": "global_actions.rs",
-    "definedIn": "src/ui/global_actions.rs:85",
+    "context": "command_palette.rs",
+    "definedIn": "src/ui/command_palette.rs:193",
     "plural": false,
     "description": null
   },
   "ACTION_COPY_TROUBLESHOOTING_INFO": {
     "context": "command_palette.rs",
-    "definedIn": "src/ui/command_palette.rs:210",
+    "definedIn": "src/ui/command_palette.rs:212",
     "plural": false,
     "description": null
   },
   "ACTION_FORCESCAN": {
     "context": "command_palette.rs",
-    "definedIn": "src/ui/command_palette.rs:250",
+    "definedIn": "src/ui/command_palette.rs:252",
     "plural": false,
     "description": null
   },
   "ACTION_GROUP_HUMMINGBIRD": {
     "context": "command_palette.rs",
-    "definedIn": "src/ui/command_palette.rs:153",
+    "definedIn": "src/ui/command_palette.rs:155",
     "plural": false,
     "description": null
   },
   "ACTION_GROUP_PLAYBACK": {
     "context": "command_palette.rs",
-    "definedIn": "src/ui/command_palette.rs:221",
+    "definedIn": "src/ui/command_palette.rs:223",
     "plural": false,
     "description": null
   },
@@ -103,7 +103,7 @@
   },
   "ACTION_GROUP_SCAN": {
     "context": "command_palette.rs",
-    "definedIn": "src/ui/command_palette.rs:249",
+    "definedIn": "src/ui/command_palette.rs:251",
     "plural": false,
     "description": null
   },
@@ -115,49 +115,49 @@
   },
   "ACTION_NEXT": {
     "context": "command_palette.rs",
-    "definedIn": "src/ui/command_palette.rs:231",
+    "definedIn": "src/ui/command_palette.rs:233",
     "plural": false,
     "description": null
   },
   "ACTION_OPEN_LOG": {
     "context": "command_palette.rs",
-    "definedIn": "src/ui/command_palette.rs:200",
+    "definedIn": "src/ui/command_palette.rs:202",
     "plural": false,
     "description": null
   },
   "ACTION_PLAYPAUSE": {
     "context": "command_palette.rs",
-    "definedIn": "src/ui/command_palette.rs:222",
+    "definedIn": "src/ui/command_palette.rs:224",
     "plural": false,
     "description": null
   },
   "ACTION_PREVIOUS": {
     "context": "command_palette.rs",
-    "definedIn": "src/ui/command_palette.rs:240",
+    "definedIn": "src/ui/command_palette.rs:242",
     "plural": false,
     "description": null
   },
   "ACTION_QUIT": {
     "context": "command_palette.rs",
-    "definedIn": "src/ui/command_palette.rs:154",
+    "definedIn": "src/ui/command_palette.rs:156",
     "plural": false,
     "description": null
   },
   "ACTION_SEARCH": {
     "context": "command_palette.rs",
-    "definedIn": "src/ui/command_palette.rs:172",
+    "definedIn": "src/ui/command_palette.rs:174",
     "plural": false,
     "description": null
   },
   "ACTION_SETTINGS": {
     "context": "command_palette.rs",
-    "definedIn": "src/ui/command_palette.rs:181",
+    "definedIn": "src/ui/command_palette.rs:183",
     "plural": false,
     "description": null
   },
   "ACTION_SHUFFLE_ALL": {
     "context": "command_palette.rs",
-    "definedIn": "src/ui/command_palette.rs:260",
+    "definedIn": "src/ui/command_palette.rs:262",
     "plural": false,
     "description": null
   },
