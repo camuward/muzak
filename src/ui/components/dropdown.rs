@@ -1,15 +1,18 @@
-use std::time::Instant;
+use std::rc::Rc;
 
 use cntp_i18n::tr;
 use gpui::{
-    App, AppContext, Corner, ElementId, Entity, FocusHandle, Focusable, InteractiveElement,
-    IntoElement, KeyBinding, KeyDownEvent, ParentElement, Pixels, Render, SharedString,
-    StatefulInteractiveElement, Styled, Window, actions, anchored, deferred, div,
-    prelude::FluentBuilder, px,
+    App, Corner, Div, ElementId, InteractiveElement, IntoElement, KeyBinding, ParentElement,
+    RenderOnce, SharedString, StatefulInteractiveElement, StyleRefinement, Styled, Window, actions,
+    anchored, deferred, div, prelude::FluentBuilder, px,
 };
+use smallvec::SmallVec;
 
 use crate::ui::{
-    components::icons::{CHECK, CHEVRON_DOWN, icon},
+    components::{
+        icons::{CHECK, CHEVRON_DOWN, icon},
+        segmented_control::ChangeHandler,
+    },
     theme::Theme,
 };
 
@@ -39,192 +42,66 @@ pub fn bind_actions(cx: &mut App) {
     ]);
 }
 
-#[derive(Clone, Debug)]
-pub struct DropdownOption {
-    pub id: SharedString,
-    pub label: SharedString,
+#[derive(IntoElement)]
+pub struct Dropdown<T: Clone + PartialEq + 'static> {
+    id: ElementId,
+    options: SmallVec<[(T, SharedString); 10]>,
+    selected: Option<T>,
+    on_change: Option<Rc<ChangeHandler<T>>>,
+    div: Div,
 }
 
-impl DropdownOption {
-    pub fn new(id: impl Into<SharedString>, label: impl Into<SharedString>) -> Self {
-        Self {
-            id: id.into(),
-            label: label.into(),
-        }
-    }
-}
-
-#[derive(Clone, Default)]
-struct TypeToFindState {
-    buffer: String,
-    last_keystroke: Option<Instant>,
-}
-
-impl TypeToFindState {
-    const TIMEOUT_MS: u128 = 500;
-
-    fn push_char(&mut self, ch: char) {
-        let now = Instant::now();
-
-        if let Some(last) = self.last_keystroke
-            && now.duration_since(last).as_millis() > Self::TIMEOUT_MS
-        {
-            self.buffer.clear();
-        }
-
-        self.buffer.push(ch);
-        self.last_keystroke = Some(now);
+impl<T: Clone + PartialEq + 'static> Dropdown<T> {
+    pub fn selected(mut self, selected: T) -> Self {
+        self.selected = Some(selected);
+        self
     }
 
-    fn find_match(&self, options: &[DropdownOption]) -> Option<usize> {
-        if self.buffer.is_empty() {
-            return None;
-        }
-
-        let search = self.buffer.to_lowercase();
-        options
-            .iter()
-            .position(|opt| opt.label.to_lowercase().starts_with(&search))
+    pub fn option(mut self, value: T, label: impl Into<SharedString>) -> Self {
+        self.options.push((value, label.into()));
+        self
     }
 
-    fn clear(&mut self) {
-        self.buffer.clear();
-        self.last_keystroke = None;
+    pub fn on_change(mut self, on_change: impl Fn(T, &mut Window, &mut App) + 'static) -> Self {
+        self.on_change = Some(Rc::new(on_change));
+        self
     }
 }
 
-type OnChangeHandler = Box<dyn Fn(usize, &DropdownOption, &mut Window, &mut App) + 'static>;
-
-pub struct DropdownState {
-    options: Vec<DropdownOption>,
-    selected_index: usize,
-    highlighted_index: usize,
-    is_open: bool,
-    type_to_find: TypeToFindState,
-    on_change: Option<OnChangeHandler>,
-    focus_handle: FocusHandle,
-    width: Option<Pixels>,
-}
-
-impl DropdownState {
-    pub fn new(
-        options: Vec<DropdownOption>,
-        selected_index: usize,
-        focus_handle: FocusHandle,
-    ) -> Self {
-        Self {
-            options,
-            selected_index,
-            highlighted_index: selected_index,
-            is_open: false,
-            type_to_find: TypeToFindState::default(),
-            on_change: None,
-            focus_handle,
-            width: None,
-        }
-    }
-
-    pub fn set_on_change(
-        &mut self,
-        handler: impl Fn(usize, &DropdownOption, &mut Window, &mut App) + 'static,
-    ) {
-        self.on_change = Some(Box::new(handler));
-    }
-
-    pub fn set_width(&mut self, width: Pixels) {
-        self.width = Some(width);
-    }
-
-    fn toggle_open(&mut self) {
-        self.is_open = !self.is_open;
-        if self.is_open {
-            self.highlighted_index = self.selected_index;
-            self.type_to_find.clear();
-        }
-    }
-
-    fn close(&mut self) {
-        self.is_open = false;
-        self.type_to_find.clear();
-    }
-
-    fn select_next(&mut self) {
-        if self.highlighted_index < self.options.len().saturating_sub(1) {
-            self.highlighted_index += 1;
-        }
-    }
-
-    fn select_prev(&mut self) {
-        if self.highlighted_index > 0 {
-            self.highlighted_index -= 1;
-        }
-    }
-
-    fn select_first(&mut self) {
-        self.highlighted_index = 0;
-    }
-
-    fn select_last(&mut self) {
-        self.highlighted_index = self.options.len().saturating_sub(1);
-    }
-
-    fn confirm(&mut self, window: &mut Window, cx: &mut App) {
-        if let Some(option) = self.options.get(self.highlighted_index) {
-            self.selected_index = self.highlighted_index;
-            if let Some(handler) = self.on_change.take() {
-                let idx = self.highlighted_index;
-                let option = option.clone();
-                handler(idx, &option, window, cx);
-                self.on_change = Some(handler);
-            }
-        }
-        self.close();
-    }
-
-    fn handle_key(&mut self, ch: char) {
-        self.type_to_find.push_char(ch);
-        if let Some(match_idx) = self.type_to_find.find_match(&self.options) {
-            self.highlighted_index = match_idx;
-        }
+impl<T: Clone + PartialEq + 'static> Styled for Dropdown<T> {
+    fn style(&mut self) -> &mut StyleRefinement {
+        self.div.style()
     }
 }
 
-impl Focusable for DropdownState {
-    fn focus_handle(&self, _cx: &App) -> FocusHandle {
-        self.focus_handle.clone()
-    }
-}
+impl<T: Clone + PartialEq + 'static> RenderOnce for Dropdown<T> {
+    fn render(mut self, window: &mut Window, cx: &mut App) -> impl IntoElement {
+        let is_open = window.use_keyed_state((self.id.clone(), "open"), cx, |_, _| false);
+        let highlighted_index =
+            window.use_keyed_state((self.id.clone(), "highlighted"), cx, |_, _| None::<usize>);
+        let focus_handle = window
+            .use_keyed_state((self.id.clone(), "focus"), cx, |_, cx| cx.focus_handle())
+            .read(cx);
 
-impl Render for DropdownState {
-    fn render(&mut self, _window: &mut Window, cx: &mut gpui::Context<Self>) -> impl IntoElement {
         let theme = cx.global::<Theme>();
 
-        let display_text = if self.selected_index < self.options.len() {
-            self.options[self.selected_index].label.clone()
+        let display_text = if let Some(option) = &self.selected {
+            self.options
+                .iter()
+                .find(|(v, _)| v == option)
+                .map(|(_, l)| l.clone())
+                .unwrap_or_else(|| tr!("DROPDOWN_PLACEHOLDER").into())
         } else {
             tr!("DROPDOWN_PLACEHOLDER", "Select...").into()
         };
 
-        let is_open = self.is_open;
-        let width = self.width;
+        let width = self.div.style().size.width;
 
-        let button = div()
-            .id(("dropdown-button", cx.entity_id()))
-            .px(px(12.0))
-            .pt(px(4.0))
-            .pb(px(3.0))
-            .text_sm()
+        let button = self
+            .div
             .bg(theme.button_secondary)
-            .border_1()
             .border_color(theme.button_secondary_border)
-            .rounded(px(4.0))
-            .cursor_pointer()
-            .flex()
-            .items_center()
-            .justify_between()
-            .gap(px(8.0))
-            .when_some(width, |this, w| this.w(w))
-            .when(width.is_none(), |this| this.min_w(px(150.0)))
+            .id(self.id)
             .child(
                 div()
                     .text_sm()
@@ -245,20 +122,36 @@ impl Render for DropdownState {
                 this.bg(theme.button_secondary_active)
                     .border_color(theme.button_secondary_border_active)
             })
-            .on_click(cx.listener(|this, _, _, cx| {
-                this.toggle_open();
-                cx.notify();
-            }));
+            .on_click({
+                let is_open = is_open.clone();
+                let highlighted = highlighted_index.clone();
+                let focus_handle = focus_handle.clone();
+                let selected_index = self
+                    .selected
+                    .as_ref()
+                    .and_then(|v| self.options.iter().position(|(x, _)| x == v));
 
-        let popup = if is_open {
+                move |_, window, cx| {
+                    is_open.update(cx, |v, cx| {
+                        *v = !*v;
+                        cx.notify();
+                    });
+                    highlighted.write(cx, selected_index);
+                    focus_handle.focus(window, cx);
+                }
+            });
+
+        let popup = if *is_open.read(cx) {
             let options = self.options.clone();
-            let selected_index = self.selected_index;
-            let highlighted_index = self.highlighted_index;
+            let selected_index = self
+                .selected
+                .and_then(|i| self.options.iter().position(|(v, _)| v == &i));
+            let highlighted = *highlighted_index.read(cx);
 
             let popup_content = div()
                 .id("dropdown-popup")
                 .occlude()
-                .w(width.unwrap_or(px(150.0)))
+                .w(width.unwrap_or(px(150.0).into()))
                 .max_h(px(300.0))
                 .overflow_y_scroll()
                 .bg(theme.elevated_background)
@@ -268,49 +161,89 @@ impl Render for DropdownState {
                 .shadow_md()
                 .p(px(3.0))
                 .mt(px(4.0))
-                .track_focus(&self.focus_handle)
+                .track_focus(focus_handle)
                 .key_context("Dropdown")
-                .on_action(cx.listener(|this, _: &Close, _, cx| {
-                    this.close();
-                    cx.notify();
-                }))
-                .on_action(cx.listener(|this, _: &SelectNext, _, cx| {
-                    this.select_next();
-                    cx.notify();
-                }))
-                .on_action(cx.listener(|this, _: &SelectPrev, _, cx| {
-                    this.select_prev();
-                    cx.notify();
-                }))
-                .on_action(cx.listener(|this, _: &SelectFirst, _, cx| {
-                    this.select_first();
-                    cx.notify();
-                }))
-                .on_action(cx.listener(|this, _: &SelectLast, _, cx| {
-                    this.select_last();
-                    cx.notify();
-                }))
-                .on_action(cx.listener(|this, _: &Confirm, window, cx| {
-                    this.confirm(window, cx);
-                    cx.notify();
-                }))
-                .on_key_down(cx.listener(|this, ev: &KeyDownEvent, _, cx| {
-                    if let Some(key_char) = &ev.keystroke.key_char
-                        && let Some(ch) = key_char.chars().next()
-                        && ch.is_alphanumeric()
-                    {
-                        this.handle_key(ch);
-                        cx.notify();
+                .on_action({
+                    let is_open = is_open.clone();
+                    move |_: &Close, _, cx| {
+                        is_open.write(cx, false);
                     }
-                }))
-                .on_mouse_down_out(cx.listener(|this, _, _, cx| {
-                    this.close();
-                    cx.notify();
-                }))
-                .children(options.iter().enumerate().map(|(idx, option)| {
-                    let is_selected = idx == selected_index;
-                    let is_highlighted = idx == highlighted_index;
-                    let label = option.label.clone();
+                })
+                .on_action({
+                    let highlighted = highlighted_index.clone();
+                    let options = self.options.clone();
+                    move |_: &SelectNext, _, cx| {
+                        highlighted.update(cx, |v, cx| {
+                            if let Some(v) = v {
+                                if *v < options.len().saturating_sub(1) {
+                                    *v += 1;
+                                } else {
+                                    *v = 0;
+                                }
+                            } else {
+                                *v = Some(0);
+                            }
+
+                            cx.notify();
+                        });
+                    }
+                })
+                .on_action({
+                    let highlighted = highlighted_index.clone();
+                    let options = self.options.clone();
+                    move |_: &SelectPrev, _, cx| {
+                        highlighted.update(cx, |v, cx| {
+                            if let Some(v) = v {
+                                if *v > 0 {
+                                    *v -= 1;
+                                } else {
+                                    *v = options.len().saturating_sub(1);
+                                }
+                            } else {
+                                *v = Some(options.len().saturating_sub(1));
+                            }
+
+                            cx.notify();
+                        });
+                    }
+                })
+                .on_action({
+                    let highlighted = highlighted_index.clone();
+                    move |_: &SelectFirst, _, cx| {
+                        highlighted.write(cx, Some(0));
+                    }
+                })
+                .on_action({
+                    let highlighted = highlighted_index.clone();
+                    let options = self.options.clone();
+                    move |_: &SelectLast, _, cx| {
+                        highlighted.write(cx, Some(options.len().saturating_sub(1)));
+                    }
+                })
+                .on_action({
+                    let is_open = is_open.clone();
+                    let highlighted = highlighted_index.clone();
+                    let options = self.options.clone();
+                    let on_change = self.on_change.clone();
+                    move |_: &Confirm, window, cx| {
+                        if let Some(option) = highlighted.read(cx).and_then(|i| options.get(i))
+                            && let Some(on_change) = &on_change
+                        {
+                            (on_change)(option.0.clone(), window, cx);
+                            is_open.write(cx, false);
+                        }
+                    }
+                })
+                .on_mouse_down_out({
+                    let is_open = is_open.clone();
+                    move |_, _, cx| {
+                        is_open.write(cx, false);
+                    }
+                })
+                .children(options.iter().cloned().enumerate().map(|(idx, option)| {
+                    let is_selected = selected_index.is_some_and(|v| v == idx);
+                    let is_highlighted = highlighted.is_some_and(|v| v == idx);
+                    let label = option.1.clone();
 
                     div()
                         .id(ElementId::Name(format!("option-{}", idx).into()))
@@ -343,11 +276,16 @@ impl Render for DropdownState {
                                 }),
                         )
                         .child(div().text_color(theme.text).child(label))
-                        .on_click(cx.listener(move |this, _, window, cx| {
-                            this.highlighted_index = idx;
-                            this.confirm(window, cx);
-                            cx.notify();
-                        }))
+                        .on_click({
+                            let highlighted = highlighted_index.clone();
+                            let on_change = self.on_change.clone();
+                            move |_, window, cx| {
+                                highlighted.write(cx, Some(idx));
+                                if let Some(on_change) = &on_change {
+                                    (on_change)(option.0.clone(), window, cx);
+                                }
+                            }
+                        })
                 }));
 
             Some(
@@ -367,11 +305,24 @@ impl Render for DropdownState {
     }
 }
 
-pub fn dropdown(
-    cx: &mut App,
-    options: Vec<DropdownOption>,
-    selected_index: usize,
-    focus_handle: FocusHandle,
-) -> Entity<DropdownState> {
-    cx.new(|_| DropdownState::new(options, selected_index, focus_handle))
+pub fn dropdown<T: Clone + PartialEq + 'static>(id: impl Into<ElementId>) -> Dropdown<T> {
+    Dropdown {
+        id: id.into(),
+        options: SmallVec::new(),
+        selected: None,
+        on_change: None,
+        div: div()
+            .px(px(12.0))
+            .pt(px(4.0))
+            .pb(px(3.0))
+            .text_sm()
+            .border_1()
+            .rounded(px(4.0))
+            .cursor_pointer()
+            .flex()
+            .items_center()
+            .justify_between()
+            .gap(px(8.0))
+            .w(px(150.0)),
+    }
 }

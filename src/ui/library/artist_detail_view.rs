@@ -16,7 +16,7 @@ use crate::{
         caching::hummingbird_cache,
         components::{
             button::{ButtonSize, button},
-            dropdown::{DropdownOption, DropdownState, dropdown},
+            dropdown::dropdown,
             icons::{SORT_ASCENDING, SORT_DESCENDING, icon},
             playback_controls::playback_controls,
             scrollbar::{RightPad, floating_scrollbar},
@@ -53,7 +53,6 @@ pub struct ArtistDetailView {
     grid_render_counter: Entity<usize>,
     nav_model: Entity<super::NavigationHistory>,
     liked_sort: LikedTrackSortMethod,
-    liked_sort_dropdown: Entity<DropdownState>,
 }
 
 impl ArtistDetailView {
@@ -113,23 +112,6 @@ impl ArtistDetailView {
             let grid_views = cx.new(|_| FxHashMap::default());
             let grid_render_counter = cx.new(|_| 0usize);
 
-            let dropdown_options = vec![
-                DropdownOption::new(
-                    "recently_added",
-                    tr!("SORT_RECENTLY_ADDED", "Recently Added"),
-                ),
-                DropdownOption::new("title", tr!("SORT_TITLE", "Title")),
-                DropdownOption::new("release_order", tr!("SORT_RELEASE_ORDER", "Release Order")),
-            ];
-
-            let focus_handle = cx.focus_handle();
-            let liked_sort_dropdown = dropdown(
-                cx,
-                dropdown_options,
-                Self::dropdown_index_from_method(liked_sort),
-                focus_handle,
-            );
-
             ArtistDetailView {
                 artist_id,
                 artist_name,
@@ -142,29 +124,7 @@ impl ArtistDetailView {
                 grid_render_counter,
                 nav_model,
                 liked_sort,
-                liked_sort_dropdown,
             }
-        });
-
-        let weak_view = view.downgrade();
-        view.update(cx, |this: &mut Self, cx: &mut Context<Self>| {
-            this.liked_sort_dropdown.update(cx, |dropdown: &mut DropdownState, _| {
-                dropdown.set_width(px(200.0));
-                dropdown.set_on_change(move |idx, _, _, cx| {
-                    let sort_method = match idx {
-                        0 => LikedTrackSortMethod::RecentlyAdded,
-                        1 => LikedTrackSortMethod::TitleAsc,
-                        2 => LikedTrackSortMethod::ReleaseOrder,
-                        _ => unreachable!(),
-                    };
-
-                    if let Some(view) = weak_view.upgrade() {
-                        view.update(cx, |this: &mut ArtistDetailView, cx: &mut Context<ArtistDetailView>| {
-                            this.update_liked_sort(sort_method, cx);
-                        });
-                    }
-                });
-            });
         });
 
         view
@@ -173,6 +133,7 @@ impl ArtistDetailView {
     pub fn update_liked_sort(&mut self, sort_method: LikedTrackSortMethod, cx: &mut Context<Self>) {
         let current_descending = Self::is_descending(self.liked_sort);
         let next_sort = Self::apply_direction(Self::base_sort(sort_method), current_descending);
+
         if self.liked_sort == next_sort {
             return;
         }
@@ -285,14 +246,6 @@ impl ArtistDetailView {
         }
     }
 
-    fn dropdown_index_from_method(sort_method: LikedTrackSortMethod) -> usize {
-        match sort_method {
-            LikedTrackSortMethod::RecentlyAdded | LikedTrackSortMethod::RecentlyAddedAsc => 0,
-            LikedTrackSortMethod::TitleAsc | LikedTrackSortMethod::TitleDesc => 1,
-            LikedTrackSortMethod::ReleaseOrder | LikedTrackSortMethod::ReleaseOrderDesc => 2,
-        }
-    }
-
     fn sync_sort_with_model(&self, cx: &mut Context<Self>) {
         let liked_tracks_sort_method = cx.global::<Models>().liked_tracks_sort_method.clone();
         liked_tracks_sort_method.update(cx, |value, _| *value = self.liked_sort);
@@ -302,6 +255,7 @@ impl ArtistDetailView {
 impl Render for ArtistDetailView {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let theme = cx.global::<Theme>();
+        let entity = cx.entity();
 
         let scroll_handle = self.scroll_handle.clone();
         let settings = cx
@@ -346,84 +300,108 @@ impl Render for ArtistDetailView {
             });
         let has_available_liked_tracks = has_available_tracks(self.liked_tracks.as_ref());
 
-        let liked_track_header = if !self.liked_track_items.is_empty() {
-            Some(
-                div()
-                    .border_t_1()
-                    .border_color(theme.border_color)
-                    .px(px(18.0))
-                    .pt(px(10.0))
-                    .pb(px(5.0))
-                    .flex()
-                    .flex_col()
-                    .gap(px(10.0))
-                    .child(
-                        div()
-                            .font_weight(FontWeight::BOLD)
-                            .text_size(px(18.0))
-                            .my_auto()
-                            .child(tr!("ARTIST_LIKED_TRACKS", "Liked Tracks")),
-                    )
-                    .child(
-                        div()
-                            .flex()
-                            .flex_row()
-                            .justify_between()
-                            .pb(px(13.0))
-                            .child(playback_controls(
-                                "artist-liked",
-                                has_available_liked_tracks,
-                                current_track_in_liked,
-                                is_playing,
-                                {
-                                    let liked_tracks = self.liked_tracks.clone();
-                                    move |cx| {
-                                        liked_tracks
-                                            .iter()
-                                            .filter(|track| is_track_available(track))
-                                            .map(|track| {
-                                                QueueItemData::new(
-                                                    cx,
-                                                    track.location.clone(),
-                                                    Some(track.id),
-                                                    track.album_id,
-                                                )
-                                            })
-                                            .collect()
-                                    }
-                                },
-                            ))
-                            .child(
-                                div()
-                                    .flex()
-                                    .gap(px(12.0))
-                                    .items_stretch()
-                                    .child(
-                                        button()
-                                            .id("artist-liked-sort-direction-button")
-                                            .size(ButtonSize::Large)
-                                            .on_click(cx.listener(
-                                                |this: &mut ArtistDetailView, _, _, cx| {
-                                                    this.toggle_liked_sort_order(cx);
-                                                },
-                                            ))
-                                            .child(
-                                                icon(if Self::is_descending(self.liked_sort) {
-                                                    SORT_DESCENDING
-                                                } else {
-                                                    SORT_ASCENDING
+        let liked_track_header =
+            if !self.liked_track_items.is_empty() {
+                Some(
+                    div()
+                        .border_t_1()
+                        .border_color(theme.border_color)
+                        .px(px(18.0))
+                        .pt(px(10.0))
+                        .pb(px(5.0))
+                        .flex()
+                        .flex_col()
+                        .gap(px(10.0))
+                        .child(
+                            div()
+                                .font_weight(FontWeight::BOLD)
+                                .text_size(px(18.0))
+                                .my_auto()
+                                .child(tr!("ARTIST_LIKED_TRACKS", "Liked Tracks")),
+                        )
+                        .child(
+                            div()
+                                .flex()
+                                .flex_row()
+                                .justify_between()
+                                .pb(px(13.0))
+                                .child(playback_controls(
+                                    "artist-liked",
+                                    has_available_liked_tracks,
+                                    current_track_in_liked,
+                                    is_playing,
+                                    {
+                                        let liked_tracks = self.liked_tracks.clone();
+                                        move |cx| {
+                                            liked_tracks
+                                                .iter()
+                                                .filter(|track| is_track_available(track))
+                                                .map(|track| {
+                                                    QueueItemData::new(
+                                                        cx,
+                                                        track.location.clone(),
+                                                        Some(track.id),
+                                                        track.album_id,
+                                                    )
                                                 })
-                                                .text_color(theme.text_secondary)
-                                                .size(px(20.0)),
-                                            ),
-                                    )
-                                    .child(self.liked_sort_dropdown.clone()),
-                            ),
-                    ),
-            )
-        } else {
-            None
-        };
+                                                .collect()
+                                        }
+                                    },
+                                ))
+                                .child(
+                                    div()
+                                        .flex()
+                                        .gap(px(12.0))
+                                        .items_stretch()
+                                        .child(
+                                            button()
+                                                .id("artist-liked-sort-direction-button")
+                                                .size(ButtonSize::Large)
+                                                .on_click(cx.listener(
+                                                    |this: &mut ArtistDetailView, _, _, cx| {
+                                                        this.toggle_liked_sort_order(cx);
+                                                    },
+                                                ))
+                                                .child(
+                                                    icon(if Self::is_descending(self.liked_sort) {
+                                                        SORT_DESCENDING
+                                                    } else {
+                                                        SORT_ASCENDING
+                                                    })
+                                                    .text_color(theme.text_secondary)
+                                                    .size(px(20.0)),
+                                                ),
+                                        )
+                                        .child(
+                                            dropdown::<LikedTrackSortMethod>(
+                                                "artist-liked-sort-dropdown",
+                                            )
+                                            .option(
+                                                LikedTrackSortMethod::RecentlyAdded,
+                                                tr!("SORT_RECENTLY_ADDED", "Recently Added"),
+                                            )
+                                            .option(
+                                                LikedTrackSortMethod::TitleAsc,
+                                                tr!("SORT_TITLE", "Title"),
+                                            )
+                                            .option(
+                                                LikedTrackSortMethod::ReleaseOrder,
+                                                tr!("SORT_RELEASE_ORDER", "Release Order"),
+                                            )
+                                            .selected(Self::base_sort(self.liked_sort))
+                                            .w(px(200.0))
+                                            .on_change(move |sort_method, _, cx| {
+                                                entity.update(cx, |this, cx| {
+                                                    this.update_liked_sort(sort_method, cx);
+                                                });
+                                            }),
+                                        ),
+                                ),
+                        ),
+                )
+            } else {
+                None
+            };
 
         div()
             .flex()

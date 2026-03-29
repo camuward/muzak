@@ -4,15 +4,16 @@ use gpui::{
     App, Div, ElementId, InteractiveElement, IntoElement, ParentElement, RenderOnce, SharedString,
     StatefulInteractiveElement, StyleRefinement, Styled, Window, div, prelude::FluentBuilder, px,
 };
+use smallvec::SmallVec;
 
 use crate::ui::theme::Theme;
 
-type ChangeHandler<T> = dyn Fn(T, &mut Window, &mut App);
+pub type ChangeHandler<T> = dyn Fn(T, &mut Window, &mut App);
 
 #[derive(IntoElement)]
 pub struct SegmentedControl<T: Clone + PartialEq + 'static> {
     id: ElementId,
-    options: Vec<(T, SharedString)>,
+    options: SmallVec<[(T, SharedString); 5]>,
     selected: Option<T>,
     on_change: Option<Rc<ChangeHandler<T>>>,
     div: Div,
@@ -99,7 +100,7 @@ pub fn segmented_control<T: Clone + PartialEq + 'static>(
 ) -> SegmentedControl<T> {
     SegmentedControl {
         id: id.into(),
-        options: Vec::new(),
+        options: SmallVec::new(),
         selected: None,
         on_change: None,
         div: div(),

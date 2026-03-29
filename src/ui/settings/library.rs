@@ -31,7 +31,7 @@ use crate::{
         components::{
             button::{ButtonIntent, ButtonStyle, button},
             callout::callout,
-            dropdown::{DropdownOption, DropdownState, dropdown},
+            dropdown::dropdown,
             icons::{ALERT_CIRCLE, CIRCLE_PLUS, FOLDER_SEARCH, TRASH, icon},
             label::label,
             section_header::section_header,
@@ -43,52 +43,11 @@ use crate::{
 pub struct LibrarySettings {
     settings: Entity<Settings>,
     scanning_modified: bool,
-    missing_folder_policy_dropdown: Entity<DropdownState>,
 }
 
 impl LibrarySettings {
     pub fn new(cx: &mut App) -> Entity<Self> {
         let settings = cx.global::<SettingsGlobal>().model.clone();
-        let scanning = settings.read(cx).scanning.clone();
-
-        let dropdown_options = vec![
-            DropdownOption::new(
-                "ask",
-                tr!("SCANNING_MISSING_POLICY_ASK", "Ask when missing"),
-            ),
-            DropdownOption::new(
-                "keep",
-                tr!("SCANNING_MISSING_POLICY_KEEP", "Keep in library"),
-            ),
-            DropdownOption::new(
-                "delete",
-                tr!("SCANNING_MISSING_POLICY_DELETE", "Delete from library"),
-            ),
-        ];
-
-        let selected_index = Self::policy_to_index(&scanning.missing_folder_policy);
-        let focus_handle = cx.focus_handle();
-        let missing_folder_policy_dropdown =
-            dropdown(cx, dropdown_options, selected_index, focus_handle);
-
-        missing_folder_policy_dropdown.update(cx, |state, _| {
-            state.set_width(px(250.0));
-        });
-
-        let settings_for_handler = settings.clone();
-        missing_folder_policy_dropdown.update(cx, |state, _| {
-            state.set_on_change(move |_idx, option, _window, cx| {
-                settings_for_handler.update(cx, |settings, cx| {
-                    settings.scanning.missing_folder_policy = match option.id.as_ref() {
-                        "keep" => MissingFolderPolicy::KeepInLibrary,
-                        "delete" => MissingFolderPolicy::DeleteFromLibrary,
-                        _ => MissingFolderPolicy::Ask,
-                    };
-                    save_settings(cx, settings);
-                    cx.notify();
-                });
-            });
-        });
 
         cx.new(|cx| {
             cx.observe(&settings, |_, _, cx| cx.notify()).detach();
@@ -96,17 +55,8 @@ impl LibrarySettings {
             Self {
                 settings,
                 scanning_modified: false,
-                missing_folder_policy_dropdown,
             }
         })
-    }
-
-    fn policy_to_index(policy: &MissingFolderPolicy) -> usize {
-        match policy {
-            MissingFolderPolicy::Ask => 0,
-            MissingFolderPolicy::KeepInLibrary => 1,
-            MissingFolderPolicy::DeleteFromLibrary => 2,
-        }
     }
 
     fn add_folder(&self, view: WeakEntity<Self>, cx: &mut App) {
@@ -294,7 +244,31 @@ impl Render for LibrarySettings {
                     unavailable."
                 ))
                 .w_full()
-                .child(self.missing_folder_policy_dropdown.clone()),
+                .child({
+                    let settings_c = self.settings.clone();
+                    dropdown::<MissingFolderPolicy>("missing-folder-policy-dropdown")
+                        .w(px(250.0))
+                        .selected(scanning.missing_folder_policy.clone())
+                        .option(
+                            MissingFolderPolicy::Ask,
+                            tr!("SCANNING_MISSING_POLICY_ASK", "Ask when missing"),
+                        )
+                        .option(
+                            MissingFolderPolicy::KeepInLibrary,
+                            tr!("SCANNING_MISSING_POLICY_KEEP", "Keep in library"),
+                        )
+                        .option(
+                            MissingFolderPolicy::DeleteFromLibrary,
+                            tr!("SCANNING_MISSING_POLICY_DELETE", "Delete from library"),
+                        )
+                        .on_change(move |policy, _, cx| {
+                            settings_c.update(cx, |s, cx| {
+                                s.scanning.missing_folder_policy = policy;
+                                save_settings(cx, s);
+                                cx.notify();
+                            });
+                        })
+                }),
             )
             .when(self.scanning_modified, |this| {
                 this.child(
