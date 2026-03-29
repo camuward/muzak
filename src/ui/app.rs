@@ -30,8 +30,7 @@ use crate::{
         caching::HummingbirdImageCache,
         command_palette::{CommandPalette, CommandPaletteHolder},
         components::dropdown,
-        library,
-        library::missing_folder_dialog::MissingFolderDialog,
+        library::{self, missing_folder_dialog::MissingFolderDialog},
     },
 };
 
@@ -208,6 +207,8 @@ pub fn run() -> anyhow::Result<()> {
             let language = settings.interface.language.clone();
             let playback_settings = settings.playback.clone();
             let scanning_settings = settings.scanning.clone();
+            #[cfg(feature = "update")]
+            let update_settings = settings.update.clone();
             let initial_repeat = if playback_settings.always_repeat
                 && playback_session.repeat == crate::playback::events::RepeatState::NotRepeating
             {
@@ -276,6 +277,11 @@ pub fn run() -> anyhow::Result<()> {
                 playback_interface.pause();
             }
             cx.set_global(playback_interface);
+
+            #[cfg(feature = "update")]
+            if update_settings.auto_update {
+                crate::update::start_update_task(cx);
+            }
 
             cx.activate(true);
 

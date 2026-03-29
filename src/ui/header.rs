@@ -1,5 +1,8 @@
 mod lastfm;
 
+#[cfg(feature = "update")]
+mod update;
+
 use cntp_i18n::tr;
 use gpui::*;
 
@@ -57,6 +60,11 @@ impl Render for Header {
         }
 
         header = header.left(self.scan_status.clone());
+
+        #[cfg(feature = "update")]
+        {
+            header = header.right(update::Update);
+        }
 
         if let Some(lastfm) = self.lastfm.clone() {
             header = header.right(lastfm);
