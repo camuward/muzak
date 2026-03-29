@@ -81,6 +81,10 @@ pub enum PlaybackCommand {
     SettingsChanged(PlaybackSettings),
     /// Informs the playback thread whether the app window is currently focused.
     SetPositionBroadcastActive(bool),
+    /// Requests that the playback thread replace the current queue with the specified queue.
+    /// Unlike ReplaceQueue, the playback thread will jump to the specified index in the new queue,
+    /// instead of the first item.
+    ReplaceQueueWithIndex(Vec<QueueItemData>, usize),
 }
 
 /// An event from the playback thread. This is used to communicate information from the playback

@@ -116,6 +116,12 @@ impl PlaybackInterface {
             .unwrap();
     }
 
+    pub fn replace_queue_with_index(&self, items: Vec<QueueItemData>, idx: usize) {
+        self.cmd_tx
+            .send(PlaybackCommand::ReplaceQueueWithIndex(items, idx))
+            .unwrap();
+    }
+
     pub fn stop(&self) {
         self.cmd_tx.send(PlaybackCommand::Stop).unwrap();
     }

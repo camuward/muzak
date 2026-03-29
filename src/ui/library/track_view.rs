@@ -73,8 +73,7 @@ impl TrackView {
                                 .unwrap_or(0);
 
                             let playback = cx.global::<PlaybackInterface>();
-                            playback.replace_queue(queue_items);
-                            playback.jump(index);
+                            playback.replace_queue_with_index(queue_items, index);
                             playback.play();
                         }
                     }

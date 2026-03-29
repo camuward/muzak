@@ -116,16 +116,14 @@ pub fn play_from_track(
         return;
     }
 
-    replace_queue(queue_items.clone(), cx);
-
     let playback_interface = cx.global::<PlaybackInterface>();
     if let Some(index) = queue_items
         .iter()
         .position(|item| item.get_path() == &track.location)
     {
-        playback_interface.jump_unshuffled(index);
+        playback_interface.replace_queue_with_index(queue_items, index);
     } else {
-        playback_interface.jump_unshuffled(0);
+        playback_interface.replace_queue(queue_items);
     }
 }
 

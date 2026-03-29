@@ -198,6 +198,9 @@ impl PlaybackThread {
                 PlaybackCommand::SetPositionBroadcastActive(active) => {
                     self.set_position_broadcast_active(active)
                 }
+                PlaybackCommand::ReplaceQueueWithIndex(v, idx) => {
+                    self.replace_queue_with_index(v, idx)
+                }
             }
         }
     }
@@ -712,6 +715,21 @@ impl PlaybackThread {
                 {
                     self.jump(first_index);
                 }
+            }
+            ReplaceResult::Empty => {
+                self.refresh_rg_auto_hint();
+                self.stop();
+            }
+        }
+
+        self.send_event(PlaybackEvent::QueueUpdated);
+    }
+
+    fn replace_queue_with_index(&mut self, paths: Vec<QueueItemData>, idx: usize) {
+        match self.queue.replace_queue(paths) {
+            ReplaceResult::Replaced { .. } => {
+                self.refresh_rg_auto_hint();
+                self.jump_unshuffled(idx);
             }
             ReplaceResult::Empty => {
                 self.refresh_rg_auto_hint();
