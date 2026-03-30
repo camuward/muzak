@@ -9,6 +9,8 @@ use cntp_i18n::{I18N_MANAGER, tr_load};
 use std::path::Path;
 use std::sync::LazyLock;
 
+use crate::media::{builtin::symphonia::SymphoniaProvider, lookup_table::add_provider};
+
 mod devices;
 mod library;
 mod logging;
@@ -48,6 +50,9 @@ fn main() -> anyhow::Result<()> {
     spawn_update_temp_cleanup();
 
     tracing::info!("version {VERSION_STRING}");
+
+    add_provider(Box::new(SymphoniaProvider));
+
     crate::ui::app::run()
 }
 

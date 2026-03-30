@@ -20,12 +20,8 @@ pub enum F32DecodeResult {
 }
 
 bitflags! {
-    #[derive(Debug, Clone, PartialEq)]
+    #[derive(Debug, Clone, Copy, PartialEq)]
     /// Media provider feature bitflags.
-    ///
-    /// Currently, the Symphonia provider is hardcoded everywhere a provider is used. In the
-    /// future, this will be replaced with a shared global registry, and these bitflags will be
-    /// used to determine when and how a provider should be used.
     pub struct MediaProviderFeatures: u8 {
         /// Indicates the provider should be used for retrieving metadata.
         const PROVIDES_METADATA        = 0b00000001;
@@ -33,20 +29,6 @@ bitflags! {
         const PROVIDES_DECODER         = 0b00000010;
         /// Indicates the provider should be considered for indexing files while scanning.
         const ALLOWS_INDEXING          = 0b00000100;
-        /// Indicates the provider should always be used for metadata, even if it isn't being used
-        /// for decoding (and another provider is).
-        const ALWAYS_READ_METADATA     = 0b00001000;
-        /// Indicates that this provider should always be used no matter the file type. This will
-        /// make the provider the lowest priority provider for every file opened, unless
-        /// ALWAYS_READ_METADATA is also set.
-        const ALWAYS_USE_THIS_PROVIDER = 0b00010000;
-        /// Indicates that this Providers's metadata should only be used to fill missing fields.
-        /// Combined with PROVIDES_METADATA, ALWAYS_READ_METADATA and ALWAYS_USE_THIS_PROVIDER,
-        /// this allows you to make metadata-only Providers that will always be used to fill
-        /// in the gaps in a track's metadata. This combination allows you to implement, for
-        /// example, a MusicBrainz-based metadata Provider or a Provider that checks for
-        /// description files next to a given audio file.
-        const FILL_MISSING_METADATA    = 0b00100000;
     }
 }
 
@@ -57,11 +39,11 @@ bitflags! {
 /// The MediaProvider trait is designed to be flexible, allowing Providers to implement only
 /// Metadata retrieval, decoding, or both. This allows for a decoding Provider to retrieve
 /// in-codec metadata without opening the file twice.
-pub trait MediaProvider {
+pub trait MediaProvider: Send + Sync {
     /// Requests the Provider open the specified file. The file is provided as a File object, and
     /// the extension is provided as an Option<&OsStr>. If the extension is not provided, the
     /// Provider attempts to determine the file type based off of the file's contents.
-    fn open(&mut self, file: File, ext: Option<&OsStr>) -> Result<Box<dyn MediaStream>, OpenError>;
+    fn open(&self, file: File, ext: Option<&OsStr>) -> Result<Box<dyn MediaStream>, OpenError>;
 
     /// Returns a list of mime-types that the Provider supports. Files will be checked against
     /// mime-types *before* being checked against extensions. If the mime-type is not
@@ -78,6 +60,9 @@ pub trait MediaProvider {
     /// Returns a list of media provider feature bitflags that the plugin supports.
     /// See `MediaProviderFeatures` for more information.
     fn supported_features(&self) -> MediaProviderFeatures;
+
+    /// Returns the provider's name.
+    fn name(&self) -> &str;
 }
 
 /// The MediaStream trait defines the methods used to interact with an open media stream. A media

@@ -13,22 +13,10 @@ use tokio::sync::{Mutex, mpsc::Sender};
 use tracing::{debug, error, info};
 
 use crate::{
-    library::scan::{decode::build_provider_table, record::ScanRecord},
-    media::traits::MediaProvider,
+    library::scan::record::ScanRecord,
+    media::{lookup_table::can_be_read, traits::MediaProviderFeatures},
     settings::scan::ScanSettings,
 };
-
-pub fn file_is_scannable_with_provider(path: &Utf8Path, exts: &[String]) -> bool {
-    for extension in exts.iter() {
-        if let Some(ext) = path.extension()
-            && *ext == **extension
-        {
-            return true;
-        }
-    }
-
-    false
-}
 
 pub fn sidecar_lyrics_path(path: &Utf8Path) -> Option<Utf8PathBuf> {
     let stem = path.file_stem()?;
@@ -67,27 +55,25 @@ fn file_scan_timestamp(path: &Utf8Path) -> Option<SystemTime> {
 fn file_is_scannable(
     path: &Utf8Path,
     scan_record: &FxHashMap<Utf8PathBuf, SystemTime>,
-    provider_table: &[(Vec<String>, Box<dyn MediaProvider>)],
 ) -> Option<SystemTime> {
     let timestamp = file_scan_timestamp(path)?;
 
-    for (exts, _) in provider_table.iter() {
-        let x = file_is_scannable_with_provider(path, exts);
-
-        if !x {
-            continue;
-        }
-
-        if let Some(last_scan) = scan_record.get(path)
-            && *last_scan == timestamp
-        {
-            return None;
-        }
-
-        return Some(timestamp);
+    if !can_be_read(
+        path.as_std_path(),
+        MediaProviderFeatures::PROVIDES_METADATA | MediaProviderFeatures::ALLOWS_INDEXING,
+    )
+    .unwrap_or(false)
+    {
+        return None;
     }
 
-    None
+    if let Some(last_scan) = scan_record.get(path)
+        && *last_scan == timestamp
+    {
+        return None;
+    }
+
+    Some(timestamp)
 }
 
 /// Remove tracks from directories that are no longer in the scan configuration.
@@ -286,7 +272,6 @@ pub fn discover(
     path_tx: Sender<(Utf8PathBuf, SystemTime)>,
     cancel_flag: Arc<AtomicBool>,
 ) -> u64 {
-    let provider_table = build_provider_table();
     let mut visited: FxHashSet<Utf8PathBuf> = FxHashSet::default();
     let mut stack: Vec<Utf8PathBuf> = settings.paths.clone();
     let mut discovered_total: u64 = 0;
@@ -342,7 +327,7 @@ pub fn discover(
             } else {
                 let timestamp = {
                     let sr = scan_record.blocking_lock();
-                    file_is_scannable(&path, &sr.records, &provider_table)
+                    file_is_scannable(&path, &sr.records)
                 };
 
                 if let Some(ts) = timestamp {

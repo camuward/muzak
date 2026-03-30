@@ -29,7 +29,7 @@ use tracing::{error, info, warn};
 use crate::{
     library::scan::{
         database::{AlbumCacheKey, AlbumPathCacheKey, update_metadata},
-        decode::{FileInformation, build_provider_table, read_metadata_for_path},
+        decode::{FileInformation, read_metadata_for_path},
         discover::{cleanup_removed_directories, cleanup_with_exclusions, discover},
         record::{SCAN_VERSION, ScanRecord, load_scan_record, write_checkpoint, write_scan_record},
     },
@@ -410,7 +410,6 @@ async fn run_scanner(
             let decode_fail_tx = decode_fail_tx.clone();
             let cancel_flag = Arc::clone(&cancel_flag);
             spawn_blocking(move || {
-                let mut provider_table = build_provider_table();
                 let mut art_cache: FxHashMap<Utf8PathBuf, Option<Arc<[u8]>>> = FxHashMap::default();
                 loop {
                     if cancel_flag.load(Ordering::Relaxed) {
@@ -429,9 +428,7 @@ async fn run_scanner(
                         break;
                     }
 
-                    if let Some(info) =
-                        read_metadata_for_path(&path, &mut provider_table, &mut art_cache)
-                    {
+                    if let Some(info) = read_metadata_for_path(&path, &mut art_cache) {
                         if cancel_flag.load(Ordering::Relaxed) {
                             break;
                         }

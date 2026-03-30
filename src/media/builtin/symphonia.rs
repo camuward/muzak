@@ -440,7 +440,7 @@ impl SymphoniaStream {
 }
 
 impl MediaProvider for SymphoniaProvider {
-    fn open(&mut self, file: File, ext: Option<&OsStr>) -> Result<Box<dyn MediaStream>, OpenError> {
+    fn open(&self, file: File, ext: Option<&OsStr>) -> Result<Box<dyn MediaStream>, OpenError> {
         let mss = MediaSourceStream::new(Box::new(file), Default::default());
         let meta_opts: MetadataOptions = Default::default();
         let fmt_opts: FormatOptions = Default::default();
@@ -501,6 +501,10 @@ impl MediaProvider for SymphoniaProvider {
         MediaProviderFeatures::ALLOWS_INDEXING
             | MediaProviderFeatures::PROVIDES_DECODER
             | MediaProviderFeatures::PROVIDES_METADATA
+    }
+
+    fn name(&self) -> &str {
+        "Symphonia"
     }
 }
 

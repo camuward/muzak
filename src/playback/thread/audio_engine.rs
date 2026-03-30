@@ -98,7 +98,6 @@ impl AudioEngine {
     ///
     /// This should be called once at startup.
     pub fn initialize(&mut self) -> Result<(), EngineError> {
-        self.media.initialize_provider();
         self.device.initialize_provider();
 
         if let Err(e) = self.device.create_stream(None) {

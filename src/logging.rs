@@ -319,7 +319,10 @@ mod tests {
     #[test]
     fn active_log_path_uses_standard_file_name() {
         let dir = create_test_dir();
-        assert_eq!(super::active_log_path_in(dir.path()), dir.join(LOG_FILE_NAME));
+        assert_eq!(
+            super::active_log_path_in(dir.path()),
+            dir.join(LOG_FILE_NAME)
+        );
     }
 
     fn log_with_layers(stderr_writer: BoxMakeWriter, file_writer: Option<FileMakeWriter>) {

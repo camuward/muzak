@@ -1,4 +1,4 @@
-use crate::library::scan::discover::{file_is_scannable_with_provider, sidecar_lyrics_path};
+use crate::library::scan::discover::sidecar_lyrics_path;
 use std::{io::Cursor, sync::Arc};
 
 use camino::{Utf8Path, Utf8PathBuf};
@@ -7,7 +7,7 @@ use image::{DynamicImage, EncodableLayout, codecs::jpeg::JpegEncoder, imageops};
 use rustc_hash::FxHashMap;
 
 use crate::media::{
-    builtin::symphonia::SymphoniaProvider, metadata::Metadata, traits::MediaProvider,
+    lookup_table::try_open_media, metadata::Metadata, traits::MediaProviderFeatures,
 };
 
 /// Information extracted from a media file during the metadata reading stage.
@@ -15,28 +15,15 @@ use crate::media::{
 /// happens in `insert_album` when a new album is actually created.
 pub type FileInformation = (Metadata, u64, Option<Box<[u8]>>);
 
-pub fn build_provider_table() -> Vec<(Vec<String>, Box<dyn MediaProvider>)> {
-    // TODO: dynamic plugin loading
-    let provider = SymphoniaProvider;
-    vec![(
-        provider
-            .supported_extensions()
-            .iter()
-            .copied()
-            .map(str::to_string)
-            .collect(),
-        Box::new(provider),
-    )]
-}
-
-/// Read metadata, duration, and embedded image from a file using the given provider.
+/// Read metadata, duration, and embedded image from a file using the global provider lookup table.
 /// Returns raw (unprocessed) image bytes.
-fn scan_file_with_provider(
-    path: &Utf8Path,
-    provider: &mut Box<dyn MediaProvider>,
-) -> Result<FileInformation, ()> {
-    let src = std::fs::File::open(path).map_err(|_| ())?;
-    let mut stream = provider.open(src, None).map_err(|_| ())?;
+fn scan_path(path: &Utf8Path) -> Result<FileInformation, ()> {
+    let mut stream = try_open_media(
+        path.as_std_path(),
+        MediaProviderFeatures::PROVIDES_METADATA | MediaProviderFeatures::ALLOWS_INDEXING,
+    )
+    .map_err(|_| ())?
+    .ok_or(())?;
     stream.start_playback().map_err(|_| ())?;
     let metadata = stream.read_metadata().cloned().map_err(|_| ())?;
     let image = stream.read_image().map_err(|_| ())?;
@@ -141,24 +128,19 @@ pub fn process_album_art(image: &[u8]) -> anyhow::Result<(Vec<u8>, Vec<u8>)> {
 /// for files in the same folder.
 pub fn read_metadata_for_path(
     path: &Utf8Path,
-    provider_table: &mut Vec<(Vec<String>, Box<dyn MediaProvider>)>,
     art_cache: &mut FxHashMap<Utf8PathBuf, Option<Arc<[u8]>>>,
 ) -> Option<FileInformation> {
-    for (exts, provider) in provider_table.iter_mut() {
-        if file_is_scannable_with_provider(path, exts)
-            && let Ok(mut metadata) = scan_file_with_provider(path, provider)
+    if let Ok(mut metadata) = scan_path(path) {
+        if metadata.2.is_none()
+            && let Some(art) = scan_path_for_album_art(path, art_cache)
         {
-            if metadata.2.is_none()
-                && let Some(art) = scan_path_for_album_art(path, art_cache)
-            {
-                metadata.2 = Some(art.to_vec().into_boxed_slice());
-            }
-
-            metadata.0.lyrics = resolve_lyrics(path, metadata.0.lyrics.take());
-
-            return Some(metadata);
+            metadata.2 = Some(art.to_vec().into_boxed_slice());
         }
-    }
 
-    None
+        metadata.0.lyrics = resolve_lyrics(path, metadata.0.lyrics.take());
+
+        Some(metadata)
+    } else {
+        None
+    }
 }

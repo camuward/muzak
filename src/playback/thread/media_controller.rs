@@ -5,14 +5,14 @@ use tracing::info;
 use crate::{
     devices::format::{ChannelSpec, SampleFormat},
     media::{
-        builtin::symphonia::SymphoniaProvider,
         errors::{
             ChannelRetrievalError, FrameDurationError, PlaybackReadError, PlaybackStartError,
             SeekError, TrackDurationError,
         },
+        lookup_table::try_open_media,
         metadata::Metadata,
         pipeline::{ChannelProducers, DecodeResult},
-        traits::{F32DecodeResult, MediaProvider, MediaStream},
+        traits::{F32DecodeResult, MediaProviderFeatures, MediaStream},
     },
 };
 
@@ -31,22 +31,12 @@ pub struct CompleteMetadata {
 /// This component handles all interactions with media providers and streams,
 /// including opening/closing files, decoding audio, and retrieving metadata.
 pub struct MediaController {
-    media_provider: Option<Box<dyn MediaProvider>>,
     media_stream: Option<Box<dyn MediaStream>>,
 }
 
 impl MediaController {
     pub fn new() -> Self {
-        Self {
-            media_provider: None,
-            media_stream: None,
-        }
-    }
-
-    /// Initialize the media provider. Currently hardcoded to Symphonia.
-    // TODO: replace this with a global lookup table
-    pub fn initialize_provider(&mut self) {
-        self.media_provider = Some(Box::new(SymphoniaProvider));
+        Self { media_stream: None }
     }
 
     /// Check if a media stream is currently open.
@@ -64,16 +54,20 @@ impl MediaController {
         // Close any existing stream
         self.close();
 
-        let provider = self.media_provider.as_deref_mut().ok_or_else(|| {
-            PlaybackStartError::MediaError("No media provider available".to_owned())
-        })?;
+        let src = try_open_media(path, MediaProviderFeatures::PROVIDES_DECODER);
 
-        let src = std::fs::File::open(path)
-            .map_err(|e| PlaybackStartError::MediaError(format!("Unable to open file: {}", e)))?;
+        if let Err(e) = src {
+            return Err(PlaybackStartError::MediaError(format!(
+                "Unable to open media: {}",
+                e
+            )));
+        }
 
-        let mut media_stream = provider
-            .open(src, None)
-            .map_err(|e| PlaybackStartError::MediaError(format!("Unable to open file: {}", e)))?;
+        let Some(mut media_stream) = src.unwrap() else {
+            return Err(PlaybackStartError::MediaError(
+                "No media provider found".to_string(),
+            ));
+        };
 
         media_stream.start_playback().map_err(|e| {
             PlaybackStartError::MediaError(format!("Unable to start playback: {}", e))
