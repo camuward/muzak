@@ -244,6 +244,7 @@ impl Render for PlaylistList {
             let weak_self = weak_entity.clone();
             let weak_self2 = weak_entity.clone();
             let is_system_playlist = playlist.playlist_type == PlaylistType::System;
+            let name = playlist.name.0.clone();
 
             main = main.child(
                 div()
@@ -259,12 +260,21 @@ impl Render for PlaylistList {
                                             tr!("RENAME_PLAYLIST", "Rename playlist"),
                                             move |_, window, cx| {
                                                 if let Some(entity) = weak_self.upgrade() {
-                                                    entity.update(cx, |this, cx| {
+                                                    let name = name.clone();
+                                                    entity.update(cx, move |this, cx| {
                                                         this.rename_popover_playlist = Some(pl_id);
                                                         this.rename_playlist_input
                                                             .read(cx)
                                                             .focus_handle()
                                                             .focus(window, cx);
+
+                                                        this.rename_playlist_input.update(
+                                                            cx,
+                                                            move |input, cx| {
+                                                                input.set_value(cx, name);
+                                                            },
+                                                        );
+
                                                         cx.notify();
                                                     });
                                                 }

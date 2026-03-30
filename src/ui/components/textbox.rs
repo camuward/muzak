@@ -53,6 +53,13 @@ impl Textbox {
     pub fn value(&self, cx: &App) -> SharedString {
         self.input.read(cx).content.clone()
     }
+
+    pub fn set_value(&self, cx: &mut App, value: SharedString) {
+        self.input.update(cx, |input, cx| {
+            input.set_value(cx, value);
+            cx.notify();
+        });
+    }
 }
 
 impl Render for Textbox {

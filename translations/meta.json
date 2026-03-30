@@ -217,7 +217,7 @@
   },
   "CANCEL": {
     "context": "playlists.rs",
-    "definedIn": "src/ui/library/sidebar/playlists.rs:422",
+    "definedIn": "src/ui/library/sidebar/playlists.rs:432",
     "plural": false,
     "description": null
   },
@@ -307,7 +307,7 @@
   },
   "CREATE": {
     "context": "playlists.rs",
-    "definedIn": "src/ui/library/sidebar/playlists.rs:431",
+    "definedIn": "src/ui/library/sidebar/playlists.rs:441",
     "plural": false,
     "description": null
   },
@@ -319,7 +319,7 @@
   },
   "DELETE_PLAYLIST": {
     "context": "playlists.rs",
-    "definedIn": "src/ui/library/sidebar/playlists.rs:289",
+    "definedIn": "src/ui/library/sidebar/playlists.rs:299",
     "plural": false,
     "description": null
   },
@@ -337,7 +337,7 @@
   },
   "EXPORT_PLAYLIST": {
     "context": "playlists.rs",
-    "definedIn": "src/ui/library/sidebar/playlists.rs:277",
+    "definedIn": "src/ui/library/sidebar/playlists.rs:287",
     "plural": false,
     "description": null
   },
@@ -511,7 +511,7 @@
   },
   "NEW_PLAYLIST": {
     "context": "playlists.rs",
-    "definedIn": "src/ui/library/sidebar/playlists.rs:380",
+    "definedIn": "src/ui/library/sidebar/playlists.rs:390",
     "plural": false,
     "description": null
   },
@@ -667,13 +667,13 @@
   },
   "RENAME": {
     "context": "playlists.rs",
-    "definedIn": "src/ui/library/sidebar/playlists.rs:359",
+    "definedIn": "src/ui/library/sidebar/playlists.rs:369",
     "plural": false,
     "description": null
   },
   "RENAME_PLAYLIST": {
     "context": "playlists.rs",
-    "definedIn": "src/ui/library/sidebar/playlists.rs:259",
+    "definedIn": "src/ui/library/sidebar/playlists.rs:260",
     "plural": false,
     "description": null
   },

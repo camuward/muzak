@@ -334,6 +334,11 @@ impl TextInput {
         };
         handler(EnrichedInputAction::Accept, window, cx);
     }
+
+    pub fn set_value(&mut self, cx: &mut Context<Self>, value: SharedString) {
+        self.content = value;
+        self.move_to(self.content.len(), cx);
+    }
 }
 
 impl EntityInputHandler for TextInput {
