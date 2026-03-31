@@ -209,7 +209,7 @@ impl SymphoniaStream {
     fn break_metadata(&mut self, tags: &[Tag]) {
         let id3_position_in_set_regex = Regex::new(r"(\d+)/(\d+)").unwrap();
         let vinyl_track_regex = Regex::new(r"(?i)^([A-Z])(\d+)$").unwrap();
-        let disc_subtitle_regex = Regex::new(r"Disc (\d+) (?:-|—|-) (.+)").unwrap();
+        let disc_subtitle_regex = Regex::new(r"(?:Disc )?(\d+) (?:-|—|-) (.+)").unwrap();
 
         for tag in tags {
             match tag.std_key {
