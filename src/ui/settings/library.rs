@@ -208,27 +208,32 @@ impl Render for LibrarySettings {
             .flex_col()
             .gap(px(12.0))
             .child(
-                section_header(tr!("SCANNING", "Scanning"))
-                    .subtitle(tr!(
-                        "SCANNING_SUBTITLE",
-                        "Changes apply on your next scan. Duplicate folders are ignored."
-                    ))
-                    .child(
-                        button()
-                            .style(ButtonStyle::Regular)
-                            .intent(ButtonIntent::Primary)
-                            .child(
-                                div()
-                                    .flex()
-                                    .gap(px(6.0))
-                                    .child(icon(CIRCLE_PLUS).my_auto().size(px(14.0)))
-                                    .child(tr!("SCANNING_ADD_FOLDERS", "Add Folders")),
-                            )
-                            .id("library-settings-add-folder")
-                            .on_click(cx.listener(move |this, _, _, cx| {
-                                this.add_folder(view.clone(), cx);
-                            })),
-                    ),
+                section_header(tr!(
+                    "SCANNING",
+                    "Scanning",
+                    #description="This is the header of the \"Scanning\" category in the library \
+                        settings - it does NOT indicate that scanning is currently in progress."
+                ))
+                .subtitle(tr!(
+                    "SCANNING_SUBTITLE",
+                    "Changes apply on your next scan. Duplicate folders are ignored."
+                ))
+                .child(
+                    button()
+                        .style(ButtonStyle::Regular)
+                        .intent(ButtonIntent::Primary)
+                        .child(
+                            div()
+                                .flex()
+                                .gap(px(6.0))
+                                .child(icon(CIRCLE_PLUS).my_auto().size(px(14.0)))
+                                .child(tr!("SCANNING_ADD_FOLDERS", "Add Folders")),
+                        )
+                        .id("library-settings-add-folder")
+                        .on_click(cx.listener(move |this, _, _, cx| {
+                            this.add_folder(view.clone(), cx);
+                        })),
+                ),
             )
             .child(
                 label(

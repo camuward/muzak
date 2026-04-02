@@ -97,7 +97,7 @@
   },
   "ACTION_GROUP_PLAYLIST": {
     "context": "library.rs",
-    "definedIn": "src/ui/library.rs:417",
+    "definedIn": "src/ui/library.rs:459",
     "plural": false,
     "description": null
   },
@@ -109,7 +109,7 @@
   },
   "ACTION_IMPORT_PLAYLIST": {
     "context": "library.rs",
-    "definedIn": "src/ui/library.rs:418",
+    "definedIn": "src/ui/library.rs:460",
     "plural": false,
     "description": null
   },
@@ -793,19 +793,19 @@
   },
   "SCAN": {
     "context": "library.rs",
-    "definedIn": "src/ui/settings/library.rs:285",
+    "definedIn": "src/ui/settings/library.rs:290",
     "plural": false,
     "description": null
   },
   "SCANNING": {
     "context": "library.rs",
-    "definedIn": "src/ui/settings/library.rs:211",
+    "definedIn": "src/ui/settings/library.rs:212",
     "plural": false,
-    "description": null
+    "description": "This is the header of the \"Scanning\" category in the library settings - it does NOT indicate that scanning is currently in progress."
   },
   "SCANNING_ADD_FOLDERS": {
     "context": "library.rs",
-    "definedIn": "src/ui/settings/library.rs:225",
+    "definedIn": "src/ui/settings/library.rs:230",
     "plural": false,
     "description": null
   },
@@ -859,31 +859,31 @@
   },
   "SCANNING_MISSING_POLICY": {
     "context": "library.rs",
-    "definedIn": "src/ui/settings/library.rs:237",
+    "definedIn": "src/ui/settings/library.rs:242",
     "plural": false,
     "description": null
   },
   "SCANNING_MISSING_POLICY_ASK": {
     "context": "library.rs",
-    "definedIn": "src/ui/settings/library.rs:254",
+    "definedIn": "src/ui/settings/library.rs:259",
     "plural": false,
     "description": null
   },
   "SCANNING_MISSING_POLICY_DELETE": {
     "context": "library.rs",
-    "definedIn": "src/ui/settings/library.rs:262",
+    "definedIn": "src/ui/settings/library.rs:267",
     "plural": false,
     "description": null
   },
   "SCANNING_MISSING_POLICY_KEEP": {
     "context": "library.rs",
-    "definedIn": "src/ui/settings/library.rs:258",
+    "definedIn": "src/ui/settings/library.rs:263",
     "plural": false,
     "description": null
   },
   "SCANNING_MISSING_POLICY_SUBTEXT": {
     "context": "library.rs",
-    "definedIn": "src/ui/settings/library.rs:242",
+    "definedIn": "src/ui/settings/library.rs:247",
     "plural": false,
     "description": null
   },
@@ -895,13 +895,13 @@
   },
   "SCANNING_RESCAN_REQUIRED": {
     "context": "library.rs",
-    "definedIn": "src/ui/settings/library.rs:276",
+    "definedIn": "src/ui/settings/library.rs:281",
     "plural": false,
     "description": null
   },
   "SCANNING_RESCAN_REQUIRED_TITLE": {
     "context": "library.rs",
-    "definedIn": "src/ui/settings/library.rs:279",
+    "definedIn": "src/ui/settings/library.rs:284",
     "plural": false,
     "description": null
   },
@@ -913,7 +913,7 @@
   },
   "SCANNING_SUBTITLE": {
     "context": "library.rs",
-    "definedIn": "src/ui/settings/library.rs:213",
+    "definedIn": "src/ui/settings/library.rs:218",
     "plural": false,
     "description": null
   },
