@@ -816,6 +816,7 @@ impl PlaybackThread {
         self.engine.update_settings(&settings);
         self.queue.update_settings(settings.clone());
         self.playback_settings = settings;
+        self.send_event(PlaybackEvent::RepeatChanged(self.queue.repeat_state()));
         self.reapply_replaygain();
     }
 
