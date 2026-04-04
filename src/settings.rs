@@ -148,7 +148,6 @@ pub fn setup_settings(cx: &mut App, path: PathBuf) {
                         }
                         match v.kind {
                             notify::EventKind::Create(_) | notify::EventKind::Modify(_) => {
-                                info!("Settings changed, updating...");
                                 let settings = create_settings(&path_for_watcher);
                                 settings_model.update(app, |v, cx| {
                                     *v = settings;

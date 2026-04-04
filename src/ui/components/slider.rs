@@ -1,4 +1,4 @@
-use std::{cell::RefCell, rc::Rc};
+use std::{cell::RefCell, rc::Rc, time::Instant};
 
 use gpui::*;
 
@@ -148,12 +148,16 @@ impl Element for Slider {
             let on_double_click = self.on_double_click.clone();
             window.with_optional_element_state(
                 id,
-                move |v: Option<Option<Rc<RefCell<bool>>>>, cx| {
-                    let mouse_in = v.flatten().unwrap_or_else(|| Rc::new(RefCell::new(false)));
+                #[allow(clippy::type_complexity)]
+                move |v: Option<Option<Rc<RefCell<(bool, Instant)>>>>, cx| {
+                    let drag_state = v
+                        .flatten()
+                        .unwrap_or_else(|| Rc::new(RefCell::new((false, Instant::now()))));
                     let func = func.clone();
                     let func_copy = func.clone();
+                    let func_final = func.clone();
 
-                    let mouse_in_1 = mouse_in.clone();
+                    let drag_state_1 = drag_state.clone();
                     let hitbox_bounds = *hitbox_bounds;
 
                     cx.on_mouse_event(move |ev: &MouseDownEvent, _, window, cx| {
@@ -169,7 +173,7 @@ impl Element for Slider {
                                 (on_double_click.borrow_mut())(window, cx);
                             }
 
-                            (*mouse_in_1.borrow_mut()) = false;
+                            drag_state_1.borrow_mut().0 = false;
                             return;
                         }
 
@@ -179,29 +183,42 @@ impl Element for Slider {
                         let value = (relative_x / width).clamp(0.0, 1.0);
 
                         (func.borrow_mut())(value, window, cx);
-                        (*mouse_in_1.borrow_mut()) = true;
+                        let mut state = drag_state_1.borrow_mut();
+                        state.0 = true;
+                        state.1 = Instant::now();
                     });
 
-                    let mouse_in_2 = mouse_in.clone();
+                    let drag_state_2 = drag_state.clone();
 
                     cx.on_mouse_event(move |ev: &MouseMoveEvent, _, window, cx| {
-                        if *mouse_in_2.borrow() {
+                        let mut state = drag_state_2.borrow_mut();
+                        if state.0 && state.1.elapsed().as_millis() >= 1 {
                             let relative = ev.position - bounds.origin;
                             let relative_x: f32 = relative.x.into();
                             let width: f32 = bounds.size.width.into();
                             let value = (relative_x / width).clamp(0.0, 1.0);
 
                             (func_copy.borrow_mut())(value, window, cx);
+                            state.1 = Instant::now();
                         }
                     });
 
-                    let mouse_in_3 = mouse_in.clone();
+                    let drag_state_3 = drag_state.clone();
 
-                    cx.on_mouse_event(move |_: &MouseUpEvent, _, _, _| {
-                        (*mouse_in_3.borrow_mut()) = false;
+                    cx.on_mouse_event(move |ev: &MouseUpEvent, _, window, cx| {
+                        let mut state = drag_state_3.borrow_mut();
+                        if state.0 {
+                            let relative = ev.position - bounds.origin;
+                            let relative_x: f32 = relative.x.into();
+                            let width: f32 = bounds.size.width.into();
+                            let value = (relative_x / width).clamp(0.0, 1.0);
+
+                            (func_final.borrow_mut())(value, window, cx);
+                            state.0 = false;
+                        }
                     });
 
-                    ((), if id.is_some() { Some(mouse_in) } else { None })
+                    ((), if id.is_some() { Some(drag_state) } else { None })
                 },
             )
         }
