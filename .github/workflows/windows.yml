@@ -43,7 +43,7 @@ jobs:
         run: echo "TARGET_TRIPLE=$((rustc -vV | Select-String 'host:').ToString().Split(' ')[1])" >> $Env:GITHUB_ENV
       - name: Install cntp build tools
         run: |
-          cargo install --git https://github.com/vicr123/contemporary-rs.git cargo-cntp-bundle
+          cargo install --frozen --git https://github.com/vicr123/contemporary-rs.git cargo-cntp-bundle
       - uses: Swatinem/rust-cache@v2
       - name: Build
         run: cargo build --verbose --release -F update
