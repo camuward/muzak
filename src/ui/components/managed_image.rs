@@ -1,8 +1,8 @@
-use std::sync::Arc;
+use std::sync::{Arc, OnceLock};
 
 use gpui::{
-    App, ElementId, IntoElement, ObjectFit, Refineable, RenderImage, RenderOnce, StyleRefinement,
-    Styled, StyledImage, Window, div, img,
+    App, Bounds, Corners, Element, ElementId, GlobalElementId, InspectorElementId, IntoElement,
+    LayoutId, ObjectFit, Pixels, Refineable, RenderImage, Style, StyleRefinement, Styled, Window,
 };
 use image::{Frame, ImageResult};
 use smallvec::SmallVec;
@@ -55,7 +55,19 @@ impl ManagedImageKey {
     }
 }
 
-#[derive(IntoElement)]
+type ImageBridge = Arc<OnceLock<Option<Arc<RenderImage>>>>;
+
+struct ManagedImageState {
+    image: Option<Arc<RenderImage>>,
+    bridge: Option<ImageBridge>,
+}
+
+pub enum ImageReady {
+    Available(Arc<RenderImage>),
+    Pending(ImageBridge),
+    None,
+}
+
 pub struct ManagedImage {
     key: ManagedImageKey,
     id: ElementId,
@@ -76,52 +88,149 @@ impl Styled for ManagedImage {
     }
 }
 
-impl RenderOnce for ManagedImage {
-    fn render(self, window: &mut Window, cx: &mut App) -> impl IntoElement {
+impl IntoElement for ManagedImage {
+    type Element = Self;
+
+    fn into_element(self) -> Self::Element {
+        self
+    }
+}
+
+impl Element for ManagedImage {
+    type RequestLayoutState = ImageReady;
+    type PrepaintState = ();
+
+    fn id(&self) -> Option<ElementId> {
+        Some(self.id.clone())
+    }
+
+    fn source_location(&self) -> Option<&'static std::panic::Location<'static>> {
+        None
+    }
+
+    fn request_layout(
+        &mut self,
+        _id: Option<&GlobalElementId>,
+        _inspector_id: Option<&InspectorElementId>,
+        window: &mut Window,
+        cx: &mut App,
+    ) -> (LayoutId, Self::RequestLayoutState) {
         let key = self.key;
-        let image = window
-            .use_keyed_state(self.id, cx, move |_window, cx| {
-                let pool = cx.global::<Pool>().0.clone();
+        let entity = window.use_keyed_state("state", cx, move |_window, cx| {
+            let pool = cx.global::<Pool>().0.clone();
+            let bridge: ImageBridge = Arc::new(OnceLock::new());
+            let bridge_clone = bridge.clone();
 
-                cx.spawn(async move |this, cx| {
-                    let image = crate::RUNTIME
-                        .spawn(async move { key.retrieve(pool).await })
-                        .await
-                        .unwrap();
+            let handle = crate::RUNTIME.spawn(async move {
+                let result = key.retrieve(pool).await;
+                let image = match &result {
+                    Ok(img) => img.clone(),
+                    Err(_) => None,
+                };
+                bridge_clone.set(image).ok();
+                result
+            });
 
-                    if let Ok(Some(image)) = image {
-                        this.update(cx, |this, cx| {
-                            *this = Some(image);
+            cx.spawn(async move |this, cx| {
+                let result = handle.await.unwrap();
+                match result {
+                    Ok(Some(image)) => {
+                        this.update(cx, |this: &mut ManagedImageState, cx| {
+                            this.image = Some(image);
+                            this.bridge = None;
                             cx.notify();
                         })
                         .ok();
-                    } else if let Err(e) = image {
-                        error!("Failed to retrieve image: {:?}", e)
                     }
-                })
-                .detach();
-
-                cx.on_release(|this, cx| {
-                    if let Some(image) = this.clone() {
-                        drop_image_from_app(cx, image);
+                    Ok(None) => {}
+                    Err(e) => {
+                        error!("Failed to retrieve image: {:?}", e);
                     }
-                })
-                .detach();
-
-                None::<Arc<RenderImage>>
+                }
             })
-            .read(cx)
-            .clone();
+            .detach();
+
+            cx.on_release(|this: &mut ManagedImageState, cx| {
+                if let Some(image) = this.image.clone() {
+                    drop_image_from_app(cx, image);
+                }
+            })
+            .detach();
+
+            ManagedImageState {
+                image: None,
+                bridge: Some(bridge),
+            }
+        });
+
+        let (image, bridge) = {
+            let state = entity.read(cx);
+            (state.image.clone(), state.bridge.clone())
+        };
+
+        let ready = if let Some(image) = image {
+            ImageReady::Available(image)
+        } else if let Some(bridge) = bridge {
+            match bridge.get() {
+                Some(Some(image)) => {
+                    let image = image.clone();
+                    entity.update(cx, |this, cx| {
+                        this.image = Some(image.clone());
+                        this.bridge = None;
+                        cx.notify();
+                    });
+                    ImageReady::Available(image)
+                }
+                Some(None) => ImageReady::None,
+                None => ImageReady::Pending(bridge),
+            }
+        } else {
+            ImageReady::None
+        };
+
+        let mut style = Style::default();
+        style.refine(&self.style);
+        let layout_id = window.request_layout(style, [], cx);
+
+        (layout_id, ready)
+    }
+
+    fn prepaint(
+        &mut self,
+        _: Option<&GlobalElementId>,
+        _: Option<&InspectorElementId>,
+        _bounds: Bounds<Pixels>,
+        _: &mut Self::RequestLayoutState,
+        _window: &mut Window,
+        _cx: &mut App,
+    ) -> Self::PrepaintState {
+    }
+
+    fn paint(
+        &mut self,
+        _: Option<&GlobalElementId>,
+        _: Option<&InspectorElementId>,
+        bounds: Bounds<Pixels>,
+        request_layout: &mut Self::RequestLayoutState,
+        _: &mut Self::PrepaintState,
+        window: &mut Window,
+        _cx: &mut App,
+    ) {
+        let image = match request_layout {
+            ImageReady::Available(image) => Some(image.clone()),
+            ImageReady::Pending(bridge) => bridge.get().cloned().flatten(),
+            ImageReady::None => None,
+        };
 
         if let Some(image) = image {
-            let mut image = img(image).object_fit(self.object_fit);
-
-            let style = image.style();
-            style.refine(&self.style);
-
-            image.into_any_element()
-        } else {
-            div().into_any_element()
+            let image_size = image.size(0);
+            let new_bounds = self.object_fit.get_bounds(bounds, image_size);
+            let mut corners = Corners::default();
+            corners.refine(&self.style.corner_radii);
+            let corner_radii = corners.to_pixels(window.rem_size());
+            if let Err(e) = window.paint_image(new_bounds, corner_radii, image, 0, false) {
+                error!("Failed to paint image: {:?}", e);
+            }
         }
     }
 }
