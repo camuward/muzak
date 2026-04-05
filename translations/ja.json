@@ -27,7 +27,7 @@
   "ACTION_SETTINGS": "設定",
   "ACTION_SHUFFLE_ALL": "",
   "ADD_TO_PLAYLIST": "プレイリストに追加",
-  "ADD_TO_QUEUE": "",
+  "ADD_TO_QUEUE": "キューに追加",
   "ADD_TO_SELECTED_PLAYLIST": "{{name}}に追加",
   "ALBUMS": "アルバム",
   "APP_NAME": "Hummingbird",
@@ -91,7 +91,7 @@
   "LIST_VIEW": "",
   "LYRICS": "歌詞",
   "MUTE": "ミュート",
-  "NEW_PLAYLIST": "",
+  "NEW_PLAYLIST": "新しいプレイリスト",
   "NEXT_TRACK": "次の曲",
   "NO_LYRICS": "歌詞無し",
   "PALETTE_SHOW_MORE": {
@@ -109,20 +109,20 @@
   "PLAYBACK_RG_FALLBACK_PREAMP": "",
   "PLAYBACK_RG_FALLBACK_PREAMP_SUBTEXT": "",
   "PLAYLIST_TRACK_COUNT": {
-    "other": ""
+    "other": "{{count}}曲"
   },
-  "PLAY_FROM_HERE": "",
-  "PLAY_NEXT": "",
+  "PLAY_FROM_HERE": "これから再生",
+  "PLAY_NEXT": "次再生",
   "PREVIOUS_TRACK": "先の曲",
-  "QUEUE_TITLE": "",
+  "QUEUE_TITLE": "キュー",
   "QUIT": "",
   "RELEASED_DATE": "",
   "RELEASED_YEAR": "",
   "RELEASE_CHANNEL": "",
   "RELEASE_CHANNEL_SUBTEXT": "",
-  "REMOVE_FROM_PLAYLIST": "",
-  "REMOVE_FROM_QUEUE": "",
-  "REMOVE_FROM_SELECTED_PLAYLIST": "",
+  "REMOVE_FROM_PLAYLIST": "プレイリストから削除",
+  "REMOVE_FROM_QUEUE": "キューから削除",
+  "REMOVE_FROM_SELECTED_PLAYLIST": "{{name}}から削除",
   "RENAME": "",
   "RENAME_PLAYLIST": "",
   "REPEAT": "",
@@ -179,10 +179,10 @@
   "SORT_TITLE": "",
   "STABLE": "",
   "STATS_TOTAL_LENGTH": {
-    "other": ""
+    "other": "{{count}}分"
   },
   "STATS_TRACKS": {
-    "other": ""
+    "other": "{{count}}曲"
   },
   "STOP_REPEATING": "",
   "STOP_SHUFFLING": "",

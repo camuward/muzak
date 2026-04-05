@@ -1,5 +1,5 @@
 {
-  "ABOUT": "",
+  "ABOUT": "Über Hummingbird",
   "ABOUT_COPYRIGHT": "",
   "ABOUT_LICENSE_AFTER_LINK": "",
   "ABOUT_LICENSE_BEFORE_LINK": "",
@@ -135,7 +135,7 @@
   "RG_AUTO": "Auto",
   "RG_MODE_LABEL": "ReplayGain-Modus",
   "RG_OFF": "Aus",
-  "RG_PREAMP_LABEL": "",
+  "RG_PREAMP_LABEL": "Vorverstärkung",
   "RG_TRACK": "Titel",
   "SCAN": "",
   "SCANNING": "",
