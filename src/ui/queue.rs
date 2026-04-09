@@ -133,11 +133,10 @@ impl Render for QueueItem {
                     && scroll_handle.should_draw_scrollbar()
             };
             let is_current = self.current == self.idx;
-            let image_key = album_id.map(ManagedImageKey::Album).or_else(|| {
-                self.item
-                    .as_ref()
-                    .map(|i| ManagedImageKey::TrackFile(i.get_path().to_path_buf()))
-            });
+            let image_key = self
+                .item
+                .as_ref()
+                .map(|i| ManagedImageKey::TrackFile(i.get_path().to_path_buf()));
             let idx = self.idx;
 
             let item_state =
