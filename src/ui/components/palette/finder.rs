@@ -36,6 +36,15 @@ pub trait PaletteItem {
     fn context_menu(&self, _window: &mut Window, _cx: &mut App) -> Option<impl IntoElement> {
         None::<Div>
     }
+    /// Provides an element to be rendered next to the context menu, used for the Add to Playlist
+    /// item in the track context menu.
+    fn context_menu_overlay(
+        &self,
+        _window: &mut Window,
+        _cx: &mut App,
+    ) -> Option<impl IntoElement> {
+        None::<Div>
+    }
 }
 
 #[derive(Clone)]
@@ -926,17 +935,30 @@ where
                 )
             });
 
-        if let Some(context_menu) = self
+        let context_menu = self
             .item_data
             .as_ref()
             .and_then(|v| v.context_menu(window, cx))
-        {
+            .map(|v| v.into_any_element());
+        let overlay = self
+            .item_data
+            .as_ref()
+            .and_then(|v| v.context_menu_overlay(window, cx))
+            .map(|v| v.into_any_element());
+
+        let base = if let Some(context_menu) = context_menu {
             context((self.id.clone(), "context_menu"))
                 .with(item)
                 .child(context_menu)
                 .into_any_element()
         } else {
             item.into_any_element()
+        };
+
+        if let Some(overlay) = overlay {
+            div().child(base).child(overlay).into_any_element()
+        } else {
+            base
         }
     }
 }
