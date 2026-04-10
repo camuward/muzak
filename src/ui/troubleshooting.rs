@@ -78,7 +78,7 @@ fn operating_system_label() -> String {
 
 fn cpu_label() -> String {
     let system =
-        System::new_with_specifics(RefreshKind::new().with_cpu(CpuRefreshKind::everything()));
+        System::new_with_specifics(RefreshKind::default().with_cpu(CpuRefreshKind::everything()));
     let Some(cpu) = system.cpus().first() else {
         return "Unknown".to_string();
     };
@@ -122,7 +122,7 @@ fn gpu_label(window: &Window) -> String {
 
 fn formatted_total_memory() -> String {
     let system = System::new_with_specifics(
-        RefreshKind::new().with_memory(MemoryRefreshKind::new().with_ram()),
+        RefreshKind::default().with_memory(MemoryRefreshKind::default().with_ram()),
     );
     format_memory(system.total_memory() as f64)
 }
