@@ -20,10 +20,11 @@ use crate::{
     ui::{
         availability::is_track_available,
         library::{
-            ViewSwitchMessage, add_to_playlist::AddToPlaylist,
-            context_menus::album::AlbumContextMenu, context_menus::track::TrackContextMenu,
+            ViewSwitchMessage,
+            add_to_playlist::AddToPlaylist,
+            context_menus::{album::AlbumContextMenu, track::TrackContextMenu},
         },
-        models::{Models, PlaylistEvent},
+        models::{Models, PlaybackInfo, PlaylistEvent},
     },
 };
 
@@ -336,12 +337,15 @@ pub fn play_album_next(cx: &mut App, album: &Album) {
 }
 
 fn shuffle_album(cx: &mut App, album: &Album) {
-    let mut queue_items = available_album_queue_items(cx, album);
+    let queue_items = available_album_queue_items(cx, album);
     if queue_items.is_empty() {
         return;
     }
 
-    queue_items.shuffle(&mut rng());
+    let interface = cx.global::<PlaybackInterface>();
+    if !(*cx.global::<PlaybackInfo>().shuffling.read(cx)) {
+        interface.toggle_shuffle();
+    }
     replace_queue(queue_items, cx);
 }
 
