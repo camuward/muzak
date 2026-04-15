@@ -54,36 +54,30 @@ where
                     .flex()
                     .gap_1()
                     .child(
-                        nav_button(
-                            "list_toggle",
-                            if !is_grid { LIST } else { LIST_INACTIVE },
-                        )
-                        .on_click(move |_, _, cx| {
-                            table_for_list.update(cx, |t, cx| {
-                                t.set_view_mode(TableViewMode::List, cx);
-                            });
-                        })
-                        .when(!is_grid, |this| {
-                            this.bg(nav_button_pressed)
-                                .border_color(nav_button_pressed_border)
-                        })
-                        .tooltip(build_tooltip(tr!("LIST_VIEW", "List View"))),
+                        nav_button("list_toggle", if !is_grid { LIST } else { LIST_INACTIVE })
+                            .on_click(move |_, _, cx| {
+                                table_for_list.update(cx, |t, cx| {
+                                    t.set_view_mode(TableViewMode::List, cx);
+                                });
+                            })
+                            .when(!is_grid, |this| {
+                                this.bg(nav_button_pressed)
+                                    .border_color(nav_button_pressed_border)
+                            })
+                            .tooltip(build_tooltip(tr!("LIST_VIEW", "List View"))),
                     )
                     .child(
-                        nav_button(
-                            "grid_toggle",
-                            if is_grid { GRID } else { GRID_INACTIVE },
-                        )
-                        .on_click(move |_, _, cx| {
-                            table_for_grid.update(cx, |t, cx| {
-                                t.set_view_mode(TableViewMode::Grid, cx);
-                            });
-                        })
-                        .when(is_grid, |this| {
-                            this.bg(nav_button_pressed)
-                                .border_color(nav_button_pressed_border)
-                        })
-                        .tooltip(build_tooltip(tr!("GRID_VIEW", "Grid View"))),
+                        nav_button("grid_toggle", if is_grid { GRID } else { GRID_INACTIVE })
+                            .on_click(move |_, _, cx| {
+                                table_for_grid.update(cx, |t, cx| {
+                                    t.set_view_mode(TableViewMode::Grid, cx);
+                                });
+                            })
+                            .when(is_grid, |this| {
+                                this.bg(nav_button_pressed)
+                                    .border_color(nav_button_pressed_border)
+                            })
+                            .tooltip(build_tooltip(tr!("GRID_VIEW", "Grid View"))),
                     ),
             )
         } else {
@@ -97,8 +91,6 @@ where
             .w_full()
             .child(
                 div()
-                    .border_l_1()
-                    .border_color(border_color)
                     .min_h(px(48.0))
                     .w_full()
                     .py(px(10.0))

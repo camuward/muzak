@@ -4,7 +4,7 @@ mod lastfm;
 mod update;
 
 use cntp_i18n::tr;
-use gpui::*;
+use gpui::{prelude::FluentBuilder, *};
 
 use tracing::{info, warn};
 
@@ -13,7 +13,7 @@ use crate::{
     services::mmb::lastfm::LASTFM_CREDS,
     ui::{
         components::{
-            icons::{FOLDER_CHECK, FOLDER_SEARCH, icon},
+            icons::{FOLDER_SEARCH, icon},
             menu_bar::MenuBar,
             window_header::header,
         },
@@ -106,19 +106,27 @@ impl Render for ScanStatus {
         div()
             .flex()
             .text_sm()
-            .child(
-                div().mr(px(8.0)).pt(px(4.5)).h_full().child(
-                    icon(match status {
-                        ScanEvent::ScanCompleteIdle | ScanEvent::ScanCompleteWatching => {
-                            FOLDER_CHECK
-                        }
-                        ScanEvent::Cleaning
-                        | ScanEvent::PlaylistsUpdated(_)
-                        | ScanEvent::ScanProgress { .. }
-                        | ScanEvent::WaitingForMissingFolderDecision { .. } => FOLDER_SEARCH,
-                    })
-                    .size(px(14.0)),
+            .when(
+                !matches!(
+                    status,
+                    ScanEvent::ScanCompleteIdle | ScanEvent::ScanCompleteWatching
                 ),
+                |this| {
+                    this.child(
+                        div().mr(px(8.0)).pt(px(4.5)).h_full().child(
+                            icon(match status {
+                                ScanEvent::Cleaning
+                                | ScanEvent::PlaylistsUpdated(_)
+                                | ScanEvent::ScanProgress { .. }
+                                | ScanEvent::WaitingForMissingFolderDecision { .. } => {
+                                    FOLDER_SEARCH
+                                }
+                                _ => unreachable!(),
+                            })
+                            .size(px(14.0)),
+                        ),
+                    )
+                },
             )
             .text_color(theme.text_secondary)
             .child(match status {

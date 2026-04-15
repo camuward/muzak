@@ -391,7 +391,7 @@
   },
   "GRID_VIEW": {
     "context": "table_view_header.rs",
-    "definedIn": "src/ui/library/table_view_header.rs:86",
+    "definedIn": "src/ui/library/table_view_header.rs:80",
     "plural": false,
     "description": null
   },
@@ -541,7 +541,7 @@
   },
   "LIST_VIEW": {
     "context": "table_view_header.rs",
-    "definedIn": "src/ui/library/table_view_header.rs:70",
+    "definedIn": "src/ui/library/table_view_header.rs:67",
     "plural": false,
     "description": null
   },
@@ -925,19 +925,19 @@
   },
   "SCAN_COMPLETE_WATCHING": {
     "context": "header.rs",
-    "definedIn": "src/ui/header.rs:151",
+    "definedIn": "src/ui/header.rs:159",
     "plural": false,
     "description": null
   },
   "SCAN_PROGRESS_DISCOVERING": {
     "context": "header.rs",
-    "definedIn": "src/ui/header.rs:130",
+    "definedIn": "src/ui/header.rs:138",
     "plural": false,
     "description": null
   },
   "SCAN_PROGRESS_SCANNING": {
     "context": "header.rs",
-    "definedIn": "src/ui/header.rs:138",
+    "definedIn": "src/ui/header.rs:146",
     "plural": false,
     "description": null
   },
