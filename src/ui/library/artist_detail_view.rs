@@ -40,10 +40,7 @@ use crate::{
     },
 };
 
-use super::{
-    ViewSwitchMessage,
-    navigation::{NavigationDisplayMode, NavigationView},
-};
+use super::ViewSwitchMessage;
 
 type GridHandler = dyn Fn(&mut App, &(u32, String)) + 'static;
 
@@ -59,7 +56,6 @@ pub struct ArtistDetailView {
     grid_render_counter: Entity<usize>,
     nav_model: Entity<super::NavigationHistory>,
     liked_sort: LikedTrackSortMethod,
-    navigation_view: Entity<NavigationView>,
 }
 
 impl ArtistDetailView {
@@ -67,7 +63,6 @@ impl ArtistDetailView {
         cx: &mut App,
         artist_id: i64,
         nav_model: Entity<super::NavigationHistory>,
-        navigation_display_mode: NavigationDisplayMode,
     ) -> Entity<Self> {
         let view: Entity<Self> = cx.new(|cx| {
             let artist = cx.get_artist_by_id(artist_id).ok();
@@ -132,11 +127,6 @@ impl ArtistDetailView {
                 grid_render_counter,
                 nav_model: nav_model.clone(),
                 liked_sort,
-                navigation_view: NavigationView::new(
-                    cx,
-                    nav_model.clone(),
-                    navigation_display_mode,
-                ),
             }
         });
 
@@ -435,7 +425,6 @@ impl Render for ArtistDetailView {
             .relative()
             .overflow_hidden()
             .when(!full_width, |this| this.max_w(px(TABLE_MAX_WIDTH)))
-            .child(self.navigation_view.clone())
             .child(
                 div()
                     .flex()

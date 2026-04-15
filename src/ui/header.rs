@@ -11,10 +11,13 @@ use tracing::{info, warn};
 use crate::{
     library::scan::ScanEvent,
     services::mmb::lastfm::LASTFM_CREDS,
-    ui::components::{
-        icons::{FOLDER_CHECK, FOLDER_SEARCH, icon},
-        menu_bar::MenuBar,
-        window_header::header,
+    ui::{
+        components::{
+            icons::{FOLDER_CHECK, FOLDER_SEARCH, icon},
+            menu_bar::MenuBar,
+            window_header::header,
+        },
+        library::nav_buttons::nav_buttons,
     },
 };
 
@@ -54,6 +57,8 @@ impl Header {
 impl Render for Header {
     fn render(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
         let mut header = header().main_window(true);
+
+        header = header.left(nav_buttons());
 
         if let Some(menu_bar) = self.menu_bar.clone() {
             header = header.left(menu_bar);

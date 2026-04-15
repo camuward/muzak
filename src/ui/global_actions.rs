@@ -7,7 +7,9 @@ use crate::{
     playback::{interface::PlaybackInterface, queue::QueueItemData, thread::PlaybackState},
     ui::{
         command_palette::OpenPalette,
-        components::menus_builder::{MenuBuilder, MenusBuilder, menu_item, menu_separator},
+        components::menus_builder::{
+            MenuBuilder, MenuPlatform, MenusBuilder, menu_item, menu_separator,
+        },
         library::playlist_view,
         settings::open_settings_window,
         troubleshooting::{CopyTroubleshootingInfo, OpenLog, copy_troubleshooting_info, open_log},
@@ -76,42 +78,106 @@ pub fn register_actions(cx: &mut App) {
     cx.bind_keys([KeyBinding::new("space", PlayPause, None)]);
 
     let mut app_menu = MenuBuilder::new(tr!("APP_NAME"))
-        .add_item(menu_item(tr!("ABOUT", "About Hummingbird"), About, false))
-        .add_item(menu_separator(false))
-        .add_item(menu_item(tr!("SETTINGS"), Settings, false));
+        .add_item(menu_item(
+            tr!("ABOUT", "About Hummingbird"),
+            About,
+            MenuPlatform::All,
+        ))
+        .add_item(menu_separator(MenuPlatform::All))
+        .add_item(menu_item(tr!("SETTINGS"), Settings, MenuPlatform::All));
 
     #[cfg(feature = "update")]
     {
         app_menu = app_menu.add_item(menu_item(
             tr!("ACTION_CHECK_FOR_UPDATES"),
             CheckForUpdates,
-            false,
+            MenuPlatform::All,
         ));
     }
 
     app_menu = app_menu
-        .add_item(menu_separator(true))
-        .add_item(if cfg!(target_os = "macos") {
-            Some(MenuItem::os_submenu(
-                "Services",
-                gpui::SystemMenuType::Services,
-            ))
-        } else {
-            None
-        })
-        .add_item(menu_separator(true))
-        .add_item(menu_item(tr!("HIDE", "Hide Hummingbird"), HideSelf, true))
+        .platform(MenuPlatform::MacOS)
+        .add_item(menu_separator(MenuPlatform::MacOS))
+        .add_item(Some(MenuItem::os_submenu(
+            "Services",
+            gpui::SystemMenuType::Services,
+        )))
+        .add_item(menu_separator(MenuPlatform::MacOS))
+        .add_item(menu_item(
+            tr!("HIDE", "Hide Hummingbird"),
+            HideSelf,
+            MenuPlatform::MacOS,
+        ))
         .add_item(menu_item(
             tr!("HIDE_OTHERS", "Hide Others"),
             HideOthers,
-            true,
+            MenuPlatform::MacOS,
         ))
-        .add_item(menu_item(tr!("SHOW_ALL", "Show All"), ShowAll, true))
-        .add_item(menu_separator(false))
-        .add_item(menu_item(tr!("QUIT", "Quit Hummingbird"), Quit, false));
+        .add_item(menu_item(
+            tr!("SHOW_ALL", "Show All"),
+            ShowAll,
+            MenuPlatform::MacOS,
+        ))
+        .add_item(menu_separator(MenuPlatform::All))
+        .add_item(menu_item(
+            tr!("QUIT", "Quit Hummingbird"),
+            Quit,
+            MenuPlatform::All,
+        ));
+
+    let mut help_menu = MenuBuilder::new(tr!("HELP", "Help")).add_item(menu_item(
+        tr!("ABOUT"),
+        About,
+        MenuPlatform::NonMacOS,
+    ));
+
+    #[cfg(feature = "update")]
+    {
+        help_menu = help_menu.add_item(menu_item(
+            tr!("ACTION_CHECK_FOR_UPDATES"),
+            CheckForUpdates,
+            MenuPlatform::NonMacOS,
+        ));
+    }
+
+    help_menu = help_menu
+        .add_item(menu_separator(MenuPlatform::NonMacOS))
+        .add_item(menu_item(
+            tr!("GITHUB_ISSUES", "Report an Issue"),
+            Issues,
+            MenuPlatform::All,
+        ))
+        .add_item(menu_item(
+            tr!("DISCORD", "Join us on Discord"),
+            Discord,
+            MenuPlatform::All,
+        ))
+        .add_item(menu_separator(MenuPlatform::All))
+        .add_item(menu_item(
+            tr!("ACTION_COPY_TROUBLESHOOTING_INFO"),
+            CopyTroubleshootingInfo,
+            MenuPlatform::All,
+        ))
+        .add_item(menu_item(
+            tr!("ACTION_OPEN_LOG"),
+            OpenLog,
+            MenuPlatform::All,
+        ))
+        .add_item(menu_separator(MenuPlatform::All))
+        .add_item(menu_item(
+            tr!("PATREON", "Support us on Patreon"),
+            Patreon,
+            MenuPlatform::All,
+        ));
 
     MenusBuilder::new()
         .add_menu(app_menu)
+        .add_menu(
+            MenuBuilder::new(tr!("FILE", "File"))
+                .add_item(menu_item(tr!("SETTINGS"), Settings, MenuPlatform::NonMacOS))
+                .add_item(menu_separator(MenuPlatform::NonMacOS))
+                .add_item(menu_item(tr!("QUIT"), Quit, MenuPlatform::NonMacOS)),
+        )
         .add_menu(
             MenuBuilder::new(tr!(
                 "VIEW",
@@ -121,28 +187,36 @@ pub fn register_actions(cx: &mut App) {
             .add_item(menu_item(
                 tr!("COMMAND_PALETTE", "Command Palette"),
                 OpenPalette,
-                false,
+                MenuPlatform::All,
             ))
-            .add_item(menu_item(tr!("SEARCH", "Search"), Search, false)),
+            .add_item(menu_item(
+                tr!("SEARCH", "Search"),
+                Search,
+                MenuPlatform::All,
+            )),
         )
         .add_menu(
             MenuBuilder::new(tr!("LIBRARY"))
                 .add_item(menu_item(
                     tr!("LIBRARY_SHUFFLE_ALL", "Shuffle All"),
                     ShuffleAll,
-                    false,
+                    MenuPlatform::All,
                 ))
-                .add_item(menu_separator(false))
-                .add_item(menu_item(tr!("LIBRARY_SCAN", "Scan"), Scan, false))
+                .add_item(menu_separator(MenuPlatform::All))
+                .add_item(menu_item(
+                    tr!("LIBRARY_SCAN", "Scan"),
+                    Scan,
+                    MenuPlatform::All,
+                ))
                 .add_item(menu_item(
                     tr!("LIBRARY_FORCE_RESCAN", "Rescan Entire Library"),
                     ForceScan,
-                    false,
+                    MenuPlatform::All,
                 ))
                 .add_item(menu_item(
                     tr!("ACTION_IMPORT_PLAYLIST"),
                     playlist_view::Import,
-                    false,
+                    MenuPlatform::All,
                 )),
         )
         .add_menu(
@@ -151,34 +225,9 @@ pub fn register_actions(cx: &mut App) {
                 "Window",
                 #description = "The Window menu. Must *exactly* match the text required by macOS."
             ))
-            .macos_only(true),
+            .platform(MenuPlatform::MacOS),
         )
-        .add_menu(
-            MenuBuilder::new(tr!("HELP", "Help"))
-                .add_item(menu_item(
-                    tr!("GITHUB_ISSUES", "Report an Issue"),
-                    Issues,
-                    false,
-                ))
-                .add_item(menu_item(
-                    tr!("DISCORD", "Join us on Discord"),
-                    Discord,
-                    false,
-                ))
-                .add_item(menu_separator(false))
-                .add_item(menu_item(
-                    tr!("ACTION_COPY_TROUBLESHOOTING_INFO"),
-                    CopyTroubleshootingInfo,
-                    false,
-                ))
-                .add_item(menu_item(tr!("ACTION_OPEN_LOG"), OpenLog, false))
-                .add_item(menu_separator(false))
-                .add_item(menu_item(
-                    tr!("PATREON", "Support us on Patreon"),
-                    Patreon,
-                    false,
-                )),
-        )
+        .add_menu(help_menu)
         .set(cx);
 }
 

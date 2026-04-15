@@ -15,7 +15,6 @@ use crate::{
 
 use super::{
     NavigationHistory, ViewSwitchMessage,
-    navigation::NavigationDisplayMode,
     table_view_header::TableViewHeader,
 };
 
@@ -30,7 +29,6 @@ impl ArtistView {
         cx: &mut App,
         view_switch_model: Entity<NavigationHistory>,
         initial_scroll_offset: Option<f32>,
-        navigation_display_mode: NavigationDisplayMode,
     ) -> Entity<Self> {
         cx.new(|cx| {
             let state = cx.global::<Models>().scan_state.clone();
@@ -41,7 +39,6 @@ impl ArtistView {
                 .get(Table::<ArtistWithCounts, ArtistColumn>::get_table_name().as_str())
                 .cloned();
 
-            let navigation_model = view_switch_model.clone();
             let handler_model = view_switch_model.clone();
             let handler = Rc::new(move |cx: &mut App, id: &i64| {
                 handler_model.update(cx, |_, cx| cx.emit(ViewSwitchMessage::Artist(*id)))
@@ -74,12 +71,7 @@ impl ArtistView {
             .detach();
 
             ArtistView {
-                table_view_header: TableViewHeader::new(
-                    cx,
-                    navigation_model,
-                    navigation_display_mode,
-                    table.clone(),
-                ),
+                table_view_header: TableViewHeader::new(cx, table.clone()),
                 table,
             }
         })
@@ -87,16 +79,6 @@ impl ArtistView {
 
     pub fn get_scroll_offset(&self, cx: &App) -> f32 {
         self.table.read(cx).get_scroll_offset(cx)
-    }
-
-    pub fn set_navigation_display_mode(
-        &mut self,
-        navigation_display_mode: NavigationDisplayMode,
-        cx: &mut Context<Self>,
-    ) {
-        self.table_view_header.update(cx, |header, cx| {
-            header.set_navigation_display_mode(navigation_display_mode, cx);
-        });
     }
 }
 

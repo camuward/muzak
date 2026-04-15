@@ -17,14 +17,12 @@ use crate::{
         components::table::{Table, TableEvent, table_data::TABLE_MAX_WIDTH},
         library::{
             context_menus::{TrackContextMenuContext, play_from_track},
-            navigation::NavigationDisplayMode,
             table_view_header::TableViewHeader,
         },
         models::Models,
     },
 };
 
-use super::NavigationHistory;
 
 #[derive(Clone)]
 pub struct TrackView {
@@ -33,12 +31,7 @@ pub struct TrackView {
 }
 
 impl TrackView {
-    pub(super) fn new(
-        cx: &mut App,
-        view_switch_model: Entity<NavigationHistory>,
-        navigation_display_mode: NavigationDisplayMode,
-        initial_scroll_offset: Option<f32>,
-    ) -> Entity<Self> {
+    pub(super) fn new(cx: &mut App, initial_scroll_offset: Option<f32>) -> Entity<Self> {
         cx.new(|cx| {
             let state = cx.global::<Models>().scan_state.clone();
 
@@ -141,12 +134,7 @@ impl TrackView {
             .detach();
 
             TrackView {
-                table_view_header: TableViewHeader::new(
-                    cx,
-                    view_switch_model.clone(),
-                    navigation_display_mode,
-                    table.clone(),
-                ),
+                table_view_header: TableViewHeader::new(cx, table.clone()),
                 table,
             }
         })
@@ -154,16 +142,6 @@ impl TrackView {
 
     pub fn get_scroll_offset(&self, cx: &App) -> f32 {
         self.table.read(cx).get_scroll_offset(cx)
-    }
-
-    pub fn set_navigation_display_mode(
-        &mut self,
-        navigation_display_mode: NavigationDisplayMode,
-        cx: &mut Context<Self>,
-    ) {
-        self.table_view_header.update(cx, |header, cx| {
-            header.set_navigation_display_mode(navigation_display_mode, cx);
-        });
     }
 }
 

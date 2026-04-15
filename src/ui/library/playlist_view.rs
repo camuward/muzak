@@ -35,7 +35,6 @@ use crate::{
             tooltip::build_tooltip,
         },
         library::{
-            navigation::{NavigationDisplayMode, NavigationView},
             track_listing::{
                 ArtistNameVisibility,
                 track_item::{TrackItem, TrackItemLeftField},
@@ -181,7 +180,6 @@ impl Render for PlaylistTrackItem {
 }
 
 pub struct PlaylistView {
-    navigation_view: Entity<NavigationView>,
     playlist: Arc<Playlist>,
     playlist_track_ids: Arc<Vec<(i64, i64, i64)>>,
     views: Entity<FxHashMap<usize, Entity<PlaylistTrackItem>>>,
@@ -195,11 +193,7 @@ pub struct PlaylistView {
 }
 
 impl PlaylistView {
-    pub(super) fn new(
-        cx: &mut App,
-        playlist_id: i64,
-        navigation_display_mode: NavigationDisplayMode,
-    ) -> Entity<Self> {
+    pub(super) fn new(cx: &mut App, playlist_id: i64) -> Entity<Self> {
         cx.new(|cx| {
             let playlist_tracker = cx.global::<Models>().playlist_tracker.clone();
 
@@ -258,14 +252,11 @@ impl PlaylistView {
             })
             .detach();
 
-            let switcher_model = cx.global::<Models>().switcher_model.clone();
-            let navigation_view = NavigationView::new(cx, switcher_model, navigation_display_mode);
             let views = cx.new(|_| FxHashMap::default());
             let render_counter = cx.new(|_| 0);
             let scroll_handle = UniformListScrollHandle::new();
 
             Self {
-                navigation_view,
                 playlist,
                 playlist_track_ids,
                 views,
@@ -493,7 +484,6 @@ impl Render for PlaylistView {
             .overflow_x_hidden()
             .when(!full_width, |this| this.max_w(px(TABLE_MAX_WIDTH)))
             .h_full()
-            .child(self.navigation_view.clone())
             .child(
                 div()
                     .pt(px(18.0))

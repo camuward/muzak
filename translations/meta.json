@@ -1,7 +1,7 @@
 {
   "ABOUT": {
     "context": "global_actions.rs",
-    "definedIn": "src/ui/global_actions.rs:79",
+    "definedIn": "src/ui/global_actions.rs:82",
     "plural": false,
     "description": null
   },
@@ -97,7 +97,7 @@
   },
   "ACTION_GROUP_PLAYLIST": {
     "context": "library.rs",
-    "definedIn": "src/ui/library.rs:569",
+    "definedIn": "src/ui/library.rs:485",
     "plural": false,
     "description": null
   },
@@ -109,7 +109,7 @@
   },
   "ACTION_IMPORT_PLAYLIST": {
     "context": "library.rs",
-    "definedIn": "src/ui/library.rs:570",
+    "definedIn": "src/ui/library.rs:486",
     "plural": false,
     "description": null
   },
@@ -199,13 +199,13 @@
   },
   "ARTIST_ALBUMS": {
     "context": "artist_detail_view.rs",
-    "definedIn": "src/ui/library/artist_detail_view.rs:515",
+    "definedIn": "src/ui/library/artist_detail_view.rs:504",
     "plural": false,
     "description": null
   },
   "ARTIST_LIKED_TRACKS": {
     "context": "artist_detail_view.rs",
-    "definedIn": "src/ui/library/artist_detail_view.rs:333",
+    "definedIn": "src/ui/library/artist_detail_view.rs:323",
     "plural": false,
     "description": null
   },
@@ -307,7 +307,7 @@
   },
   "COMMAND_PALETTE": {
     "context": "global_actions.rs",
-    "definedIn": "src/ui/global_actions.rs:122",
+    "definedIn": "src/ui/global_actions.rs:188",
     "plural": false,
     "description": null
   },
@@ -337,7 +337,7 @@
   },
   "DISCORD": {
     "context": "global_actions.rs",
-    "definedIn": "src/ui/global_actions.rs:164",
+    "definedIn": "src/ui/global_actions.rs:151",
     "plural": false,
     "description": null
   },
@@ -361,13 +361,19 @@
   },
   "EXPORT_PLAYLIST_TO_M3U": {
     "context": "playlist_view.rs",
-    "definedIn": "src/ui/library/playlist_view.rs:250",
+    "definedIn": "src/ui/library/playlist_view.rs:244",
+    "plural": false,
+    "description": null
+  },
+  "FILE": {
+    "context": "global_actions.rs",
+    "definedIn": "src/ui/global_actions.rs:176",
     "plural": false,
     "description": null
   },
   "GITHUB_ISSUES": {
     "context": "global_actions.rs",
-    "definedIn": "src/ui/global_actions.rs:159",
+    "definedIn": "src/ui/global_actions.rs:146",
     "plural": false,
     "description": null
   },
@@ -385,25 +391,25 @@
   },
   "GRID_VIEW": {
     "context": "table_view_header.rs",
-    "definedIn": "src/ui/library/table_view_header.rs:100",
+    "definedIn": "src/ui/library/table_view_header.rs:86",
     "plural": false,
     "description": null
   },
   "HELP": {
     "context": "global_actions.rs",
-    "definedIn": "src/ui/global_actions.rs:157",
+    "definedIn": "src/ui/global_actions.rs:128",
     "plural": false,
     "description": null
   },
   "HIDE": {
     "context": "global_actions.rs",
-    "definedIn": "src/ui/global_actions.rs:103",
+    "definedIn": "src/ui/global_actions.rs:107",
     "plural": false,
     "description": null
   },
   "HIDE_OTHERS": {
     "context": "global_actions.rs",
-    "definedIn": "src/ui/global_actions.rs:105",
+    "definedIn": "src/ui/global_actions.rs:112",
     "plural": false,
     "description": null
   },
@@ -511,19 +517,19 @@
   },
   "LIBRARY_FORCE_RESCAN": {
     "context": "global_actions.rs",
-    "definedIn": "src/ui/global_actions.rs:138",
+    "definedIn": "src/ui/global_actions.rs:212",
     "plural": false,
     "description": null
   },
   "LIBRARY_SCAN": {
     "context": "global_actions.rs",
-    "definedIn": "src/ui/global_actions.rs:136",
+    "definedIn": "src/ui/global_actions.rs:207",
     "plural": false,
     "description": null
   },
   "LIBRARY_SHUFFLE_ALL": {
     "context": "global_actions.rs",
-    "definedIn": "src/ui/global_actions.rs:131",
+    "definedIn": "src/ui/global_actions.rs:201",
     "plural": false,
     "description": null
   },
@@ -535,7 +541,7 @@
   },
   "LIST_VIEW": {
     "context": "table_view_header.rs",
-    "definedIn": "src/ui/library/table_view_header.rs:84",
+    "definedIn": "src/ui/library/table_view_header.rs:70",
     "plural": false,
     "description": null
   },
@@ -577,7 +583,7 @@
   },
   "PATREON": {
     "context": "global_actions.rs",
-    "definedIn": "src/ui/global_actions.rs:177",
+    "definedIn": "src/ui/global_actions.rs:168",
     "plural": false,
     "description": null
   },
@@ -673,19 +679,19 @@
   },
   "QUIT": {
     "context": "global_actions.rs",
-    "definedIn": "src/ui/global_actions.rs:111",
+    "definedIn": "src/ui/global_actions.rs:123",
     "plural": false,
     "description": null
   },
   "RELEASED_DATE": {
     "context": "release_view.rs",
-    "definedIn": "src/ui/library/release_view.rs:267",
+    "definedIn": "src/ui/library/release_view.rs:258",
     "plural": false,
     "description": null
   },
   "RELEASED_YEAR": {
     "context": "release_view.rs",
-    "definedIn": "src/ui/library/release_view.rs:282",
+    "definedIn": "src/ui/library/release_view.rs:273",
     "plural": false,
     "description": null
   },
@@ -919,25 +925,25 @@
   },
   "SCAN_COMPLETE_WATCHING": {
     "context": "header.rs",
-    "definedIn": "src/ui/header.rs:146",
+    "definedIn": "src/ui/header.rs:151",
     "plural": false,
     "description": null
   },
   "SCAN_PROGRESS_DISCOVERING": {
     "context": "header.rs",
-    "definedIn": "src/ui/header.rs:125",
+    "definedIn": "src/ui/header.rs:130",
     "plural": false,
     "description": null
   },
   "SCAN_PROGRESS_SCANNING": {
     "context": "header.rs",
-    "definedIn": "src/ui/header.rs:133",
+    "definedIn": "src/ui/header.rs:138",
     "plural": false,
     "description": null
   },
   "SEARCH": {
     "context": "global_actions.rs",
-    "definedIn": "src/ui/global_actions.rs:126",
+    "definedIn": "src/ui/global_actions.rs:193",
     "plural": false,
     "description": null
   },
@@ -973,7 +979,7 @@
   },
   "SHOW_ALL": {
     "context": "global_actions.rs",
-    "definedIn": "src/ui/global_actions.rs:109",
+    "definedIn": "src/ui/global_actions.rs:117",
     "plural": false,
     "description": null
   },
@@ -1015,55 +1021,55 @@
   },
   "SORT_ALBUM": {
     "context": "playlist_view.rs",
-    "definedIn": "src/ui/library/playlist_view.rs:71",
+    "definedIn": "src/ui/library/playlist_view.rs:70",
     "plural": false,
     "description": null
   },
   "SORT_ARTIST": {
     "context": "playlist_view.rs",
-    "definedIn": "src/ui/library/playlist_view.rs:68",
+    "definedIn": "src/ui/library/playlist_view.rs:67",
     "plural": false,
     "description": null
   },
   "SORT_ASCENDING": {
     "context": "artist_detail_view.rs",
-    "definedIn": "src/ui/library/artist_detail_view.rs:389",
+    "definedIn": "src/ui/library/artist_detail_view.rs:379",
     "plural": false,
     "description": null
   },
   "SORT_CUSTOM": {
     "context": "playlist_view.rs",
-    "definedIn": "src/ui/library/playlist_view.rs:63",
+    "definedIn": "src/ui/library/playlist_view.rs:62",
     "plural": false,
     "description": null
   },
   "SORT_DESCENDING": {
     "context": "artist_detail_view.rs",
-    "definedIn": "src/ui/library/artist_detail_view.rs:394",
+    "definedIn": "src/ui/library/artist_detail_view.rs:384",
     "plural": false,
     "description": null
   },
   "SORT_DURATION": {
     "context": "playlist_view.rs",
-    "definedIn": "src/ui/library/playlist_view.rs:74",
+    "definedIn": "src/ui/library/playlist_view.rs:73",
     "plural": false,
     "description": null
   },
   "SORT_RECENTLY_ADDED": {
     "context": "artist_detail_view.rs",
-    "definedIn": "src/ui/library/artist_detail_view.rs:405",
+    "definedIn": "src/ui/library/artist_detail_view.rs:395",
     "plural": false,
     "description": null
   },
   "SORT_RELEASE_ORDER": {
     "context": "artist_detail_view.rs",
-    "definedIn": "src/ui/library/artist_detail_view.rs:413",
+    "definedIn": "src/ui/library/artist_detail_view.rs:403",
     "plural": false,
     "description": null
   },
   "SORT_TITLE": {
     "context": "artist_detail_view.rs",
-    "definedIn": "src/ui/library/artist_detail_view.rs:409",
+    "definedIn": "src/ui/library/artist_detail_view.rs:399",
     "plural": false,
     "description": null
   },
@@ -1195,13 +1201,13 @@
   },
   "VIEW": {
     "context": "global_actions.rs",
-    "definedIn": "src/ui/global_actions.rs:117",
+    "definedIn": "src/ui/global_actions.rs:183",
     "plural": false,
     "description": "The View menu. Must *exactly* match the text required by macOS."
   },
   "WINDOW": {
     "context": "global_actions.rs",
-    "definedIn": "src/ui/global_actions.rs:150",
+    "definedIn": "src/ui/global_actions.rs:224",
     "plural": false,
     "description": "The Window menu. Must *exactly* match the text required by macOS."
   }

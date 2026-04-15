@@ -23,7 +23,6 @@ use crate::{
         },
         library::{
             ViewSwitchMessage,
-            navigation::{NavigationDisplayMode, NavigationView},
             track_listing::{ArtistNameVisibility, TrackListing},
         },
         models::{Models, PlaybackInfo},
@@ -35,7 +34,6 @@ use crate::{
 const RELEASE_SCROLL_ANIMATION_DURATION: Duration = Duration::from_millis(250);
 
 pub struct ReleaseView {
-    navigation_view: Entity<NavigationView>,
     album: Arc<Album>,
     artist_name: Option<DBString>,
     tracks: Arc<Vec<Track>>,
@@ -53,8 +51,6 @@ impl ReleaseView {
         cx: &mut App,
         album_id: i64,
         target_track_id: Option<i64>,
-        view_switch_model: Entity<super::NavigationHistory>,
-        navigation_display_mode: NavigationDisplayMode,
     ) -> Entity<Self> {
         cx.new(|cx| {
             // TODO: error handling
@@ -112,11 +108,6 @@ impl ReleaseView {
             });
 
             ReleaseView {
-                navigation_view: NavigationView::new(
-                    cx,
-                    view_switch_model.clone(),
-                    navigation_display_mode,
-                ),
                 album,
                 artist_name,
                 tracks,
@@ -403,7 +394,6 @@ impl Render for ReleaseView {
             .relative()
             .overflow_hidden()
             .when(!full_width, |this| this.max_w(px(TABLE_MAX_WIDTH)))
-            .child(self.navigation_view.clone())
             .child(
                 div()
                     .id("release-view")

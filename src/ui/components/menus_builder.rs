@@ -1,5 +1,22 @@
 use gpui::{Action, App, Menu, MenuItem, SharedString};
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum MenuPlatform {
+    MacOS,
+    NonMacOS,
+    All,
+}
+
+impl MenuPlatform {
+    fn is_active(self) -> bool {
+        match self {
+            Self::MacOS => cfg!(target_os = "macos"),
+            Self::NonMacOS => !cfg!(target_os = "macos"),
+            Self::All => true,
+        }
+    }
+}
+
 pub struct MenusBuilder {
     menus: Vec<Menu>,
 }
@@ -34,7 +51,7 @@ impl MenusBuilder {
 pub struct MenuBuilder {
     name: SharedString,
     items: Vec<MenuItem>,
-    macos_only: bool,
+    platform: MenuPlatform,
     disabled: bool,
 }
 
@@ -43,13 +60,13 @@ impl MenuBuilder {
         Self {
             name: name.into(),
             items: Vec::new(),
-            macos_only: false,
+            platform: MenuPlatform::All,
             disabled: false,
         }
     }
 
-    pub fn macos_only(mut self, macos_only: bool) -> Self {
-        self.macos_only = macos_only;
+    pub fn platform(mut self, platform: MenuPlatform) -> Self {
+        self.platform = platform;
         self
     }
 
@@ -61,7 +78,7 @@ impl MenuBuilder {
     }
 
     pub fn build(self) -> Option<Menu> {
-        if self.macos_only && !cfg!(target_os = "macos") {
+        if !self.platform.is_active() {
             return None;
         }
 
@@ -73,8 +90,7 @@ impl MenuBuilder {
     }
 }
 
-/// Creates a single GPUI `MenuItem`, unless the item is marked as macOS-only and the application
-/// was not built for macOS.
+/// Creates a single GPUI `MenuItem`, unless the platform check fails.
 ///
 /// This file (and everything in it) is related to building **GPUI** application-level menus. There
 /// is no relation between `menus_builder` and `menu`, though the menus built by this builder are
@@ -82,23 +98,22 @@ impl MenuBuilder {
 pub fn menu_item<A: Action>(
     name: impl Into<SharedString>,
     action: A,
-    macos_only: bool,
+    platform: MenuPlatform,
 ) -> Option<MenuItem> {
-    if macos_only && !cfg!(target_os = "macos") {
+    if !platform.is_active() {
         return None;
     }
 
     Some(MenuItem::action(name, action))
 }
 
-/// Creates a single GPUI `MenuItem` seperator, unless the item is marked as macOS-only and the
-/// application was not built for macOS.
+/// Creates a single GPUI `MenuItem` separator, unless the platform check fails.
 ///
 /// This file (and everything in it) is related to building **GPUI** application-level menus. There
 /// is no relation between `menus_builder` and `menu`, though the menus built by this builder are
 /// used to populate the application's menu bar.
-pub fn menu_separator(macos_only: bool) -> Option<MenuItem> {
-    if macos_only && !cfg!(target_os = "macos") {
+pub fn menu_separator(platform: MenuPlatform) -> Option<MenuItem> {
+    if !platform.is_active() {
         return None;
     }
 

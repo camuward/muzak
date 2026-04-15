@@ -10,14 +10,14 @@ use crate::{
     ui::{
         components::table::{Table, TableEvent, table_data::TABLE_MAX_WIDTH},
         library::{
-            NavigationDisplayMode, context_menus::AlbumContextMenuContext,
+            context_menus::AlbumContextMenuContext,
             table_view_header::TableViewHeader,
         },
         models::Models,
     },
 };
 
-use super::{NavigationHistory, ViewSwitchMessage};
+use super::ViewSwitchMessage;
 
 #[derive(Clone)]
 pub struct AlbumView {
@@ -28,8 +28,7 @@ pub struct AlbumView {
 impl AlbumView {
     pub(super) fn new(
         cx: &mut App,
-        view_switch_model: Entity<NavigationHistory>,
-        navigation_mode: NavigationDisplayMode,
+        view_switch_model: Entity<super::NavigationHistory>,
         initial_scroll_offset: Option<f32>,
     ) -> Entity<Self> {
         cx.new(|cx| {
@@ -75,12 +74,7 @@ impl AlbumView {
             .detach();
 
             AlbumView {
-                table_view_header: TableViewHeader::new(
-                    cx,
-                    view_switch_model.clone(),
-                    navigation_mode,
-                    table.clone(),
-                ),
+                table_view_header: TableViewHeader::new(cx, table.clone()),
                 table,
             }
         })
@@ -88,16 +82,6 @@ impl AlbumView {
 
     pub fn get_scroll_offset(&self, cx: &App) -> f32 {
         self.table.read(cx).get_scroll_offset(cx)
-    }
-
-    pub fn set_navigation_display_mode(
-        &mut self,
-        navigation_display_mode: NavigationDisplayMode,
-        cx: &mut Context<Self>,
-    ) {
-        self.table_view_header.update(cx, |header, cx| {
-            header.set_navigation_display_mode(navigation_display_mode, cx);
-        });
     }
 }
 

@@ -44,12 +44,10 @@ impl Render for MenuBar {
                             .rounded(px(4.0))
                             .px(px(7.0))
                             .ml(px(-8.0))
-                            .when(menu_index == 0, |this| this.font_weight(FontWeight::BOLD))
                             .py(px(4.0))
                             .cursor_pointer()
                             .flex()
                             .items_center()
-                            .line_height(rems(1.25))
                             .text_sm()
                             .hover(|this| {
                                 this.bg(theme.menu_item_hover)
