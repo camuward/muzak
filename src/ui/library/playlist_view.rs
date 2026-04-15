@@ -34,11 +34,9 @@ use crate::{
             table::table_data::TABLE_MAX_WIDTH,
             tooltip::build_tooltip,
         },
-        library::{
-            track_listing::{
-                ArtistNameVisibility,
-                track_item::{TrackItem, TrackItemLeftField},
-            },
+        library::track_listing::{
+            ArtistNameVisibility,
+            track_item::{TrackItem, TrackItemLeftField},
         },
         models::{Models, PlaylistEvent},
         theme::Theme,
@@ -486,7 +484,7 @@ impl Render for PlaylistView {
             .h_full()
             .child(
                 div()
-                    .pt(px(18.0))
+                    .pt(px(48.0))
                     .flex()
                     .overflow_x_hidden()
                     .flex_shrink()

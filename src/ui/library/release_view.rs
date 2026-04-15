@@ -47,11 +47,7 @@ pub struct ReleaseView {
 }
 
 impl ReleaseView {
-    pub(super) fn new(
-        cx: &mut App,
-        album_id: i64,
-        target_track_id: Option<i64>,
-    ) -> Entity<Self> {
+    pub(super) fn new(cx: &mut App, album_id: i64, target_track_id: Option<i64>) -> Entity<Self> {
         cx.new(|cx| {
             // TODO: error handling
             let album = cx
@@ -130,7 +126,7 @@ impl ReleaseView {
         is_playing: bool,
     ) -> impl IntoElement {
         div()
-            .pt(px(18.0))
+            .pt(px(48.0))
             .flex_shrink()
             .flex()
             .overflow_x_hidden()
