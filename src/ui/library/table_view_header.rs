@@ -45,7 +45,7 @@ where
                         div()
                             .line_height(px(26.0))
                             .font_weight(FontWeight::BOLD)
-                            .text_size(px(16.0))
+                            .text_size(px(18.0))
                             .child(Table::<T, C>::get_table_name())
                             .into_any_element()
                     },

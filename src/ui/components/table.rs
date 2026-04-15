@@ -656,8 +656,6 @@ where
                             .w_full()
                             .flex()
                             .h_full()
-                            .border_t_1()
-                            .border_color(theme.border_color)
                             .px(px(grid_padding))
                             .overflow_y_hidden()
                             .child(

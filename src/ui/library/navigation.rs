@@ -141,8 +141,8 @@ impl Render for NavigationView {
                         .flex()
                         .gap(px(4.0))
                         .when(!full_width, |this: Div| this.max_w(px(TABLE_MAX_WIDTH)))
-                        .pl(px(12.0))
-                        .py(px(12.0))
+                        .px(px(10.0))
+                        .py(px(10.0))
                         .child(
                             nav_button("back", ARROW_LEFT)
                                 .disabled(!can_go_back)
@@ -166,15 +166,17 @@ impl Render for NavigationView {
             .when(has_slots, |d| {
                 d.child(
                     div()
-                        .min_h(px(52.0))
+                        .border_l_1()
+                        .border_color(theme.border_color)
+                        .min_h(px(48.0))
                         .w_full()
-                        .pt(px(12.0))
-                        .pb(px(12.0))
-                        .px(px(12.0))
+                        .py(px(10.0))
+                        .pl(px(18.0))
+                        .pr(px(12.0))
                         .flex()
                         .justify_between()
                         .items_center()
-                        .when_some(left_element, |d, el| d.child(div().ml(px(6.0)).child(el)))
+                        .when_some(left_element, |d, el| d.child(el))
                         .when_some(right_element, |d, el| d.child(el)),
                 )
             })
