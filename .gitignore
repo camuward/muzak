@@ -16,3 +16,4 @@ package/inno/Output/*.exe
 .idea/
 .vscode/
 .zed/
+Session.vim
