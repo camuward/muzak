@@ -458,10 +458,11 @@ impl Render for Queue {
                 div()
                     .w_full()
                     .py(px(10.0))
-                    .pl(px(18.0))
+                    .pl(px(12.0))
                     .pr(px(12.0))
                     .flex()
                     .justify_between()
+                    .items_center()
                     .child(
                         div()
                             .line_height(px(26.0))
