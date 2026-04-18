@@ -4,7 +4,7 @@
   "ABOUT_COMMUNITY_DISCORD": "Připojte se k nám na Discordu",
   "ABOUT_COMMUNITY_END": ".",
   "ABOUT_COMMUNITY_MIDDLE": "nebo",
-  "ABOUT_COMMUNITY_WEBSITE": "Visit our website",
+  "ABOUT_COMMUNITY_WEBSITE": "Navštivte náš web",
   "ABOUT_COPYRIGHT": "Copyright © 2024 - 2026 William Whittaker a přispěvatelé.",
   "ABOUT_LICENSE_AFTER_LINK": "​",
   "ABOUT_LICENSE_BEFORE_LINK": "Licencováno pod licencí Apache, verze 2.0.",
@@ -46,9 +46,9 @@
   "CLOSE": "Zavřít",
   "COLLAPSE_SIDEBAR": "Zúžit postranní panel",
   "COLLECTION_SUMMARY_TRACKS": {
-    "one": "",
-    "few": "",
-    "other": ""
+    "one": "{{count}} skladba",
+    "few": "{{count}} skladby",
+    "other": "{{count}} skladeb"
   },
   "COLUMN_ALBUM": "Album",
   "COLUMN_ALBUMS": "# Alb",
