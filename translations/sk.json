@@ -1,5 +1,10 @@
 {
   "ABOUT": "O aplikácií Hummingbird",
+  "ABOUT_COMMUNITY_BEFORE_LINKS": "​",
+  "ABOUT_COMMUNITY_DISCORD": "pripojte sa k nám na Discorde",
+  "ABOUT_COMMUNITY_END": ".",
+  "ABOUT_COMMUNITY_MIDDLE": "alebo",
+  "ABOUT_COMMUNITY_WEBSITE": "Navštívte našu webovú stránku",
   "ABOUT_COPYRIGHT": "Copyright © 2024 - 2026 William Whittaker a prispievatelia.",
   "ABOUT_LICENSE_AFTER_LINK": "​",
   "ABOUT_LICENSE_BEFORE_LINK": "Licencované pod licenciou Apache, verzia 2.0. ",
@@ -40,6 +45,11 @@
   "CLICK_TO_CONFIRM": "Kliknite pre potvrdenie prihlásenia",
   "CLOSE": "Zavrieť",
   "COLLAPSE_SIDEBAR": "Zúžiť bočný panel",
+  "COLLECTION_SUMMARY_TRACKS": {
+    "one": "{{count}} skladba",
+    "few": "{{count}} skladby",
+    "other": "{{count}} skladieb"
+  },
   "COLUMN_ALBUM": "Album",
   "COLUMN_ALBUMS": "# Albumov",
   "COLUMN_ARTIST": "Interpret",
@@ -60,6 +70,7 @@
   "EXPAND_SIDEBAR": "Rozšíriť bočný panel",
   "EXPORT_PLAYLIST": "Exportovať do M3U playlistu",
   "EXPORT_PLAYLIST_TO_M3U": "Exportovať Playlist do M3U",
+  "FILE": "Súbor",
   "GITHUB_ISSUES": "Nahlásiť problém",
   "GO_TO_ALBUM": "Prejsť na album",
   "GO_TO_ARTIST": "Prejsť na interpreta",

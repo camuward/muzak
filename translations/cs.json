@@ -1,5 +1,10 @@
 {
   "ABOUT": "O aplikaci Hummingbird",
+  "ABOUT_COMMUNITY_BEFORE_LINKS": "​",
+  "ABOUT_COMMUNITY_DISCORD": "Připojte se k nám na Discordu",
+  "ABOUT_COMMUNITY_END": ".",
+  "ABOUT_COMMUNITY_MIDDLE": "nebo",
+  "ABOUT_COMMUNITY_WEBSITE": "Visit our website",
   "ABOUT_COPYRIGHT": "Copyright © 2024 - 2026 William Whittaker a přispěvatelé.",
   "ABOUT_LICENSE_AFTER_LINK": "​",
   "ABOUT_LICENSE_BEFORE_LINK": "Licencováno pod licencí Apache, verze 2.0.",
@@ -40,6 +45,11 @@
   "CLICK_TO_CONFIRM": "Klikněte pro potvrzení přihlášení",
   "CLOSE": "Zavřít",
   "COLLAPSE_SIDEBAR": "Zúžit postranní panel",
+  "COLLECTION_SUMMARY_TRACKS": {
+    "one": "",
+    "few": "",
+    "other": ""
+  },
   "COLUMN_ALBUM": "Album",
   "COLUMN_ALBUMS": "# Alb",
   "COLUMN_ARTIST": "Interpret",
@@ -60,6 +70,7 @@
   "EXPAND_SIDEBAR": "Rozšířit postranní panel",
   "EXPORT_PLAYLIST": "Exportovat do M3U playlistu",
   "EXPORT_PLAYLIST_TO_M3U": "Exportovat playlist do M3U",
+  "FILE": "Soubor",
   "GITHUB_ISSUES": "Nahlásit problém",
   "GO_TO_ALBUM": "Přejít na album",
   "GO_TO_ARTIST": "Přejít na interpreta",
