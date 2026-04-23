@@ -11,7 +11,8 @@ use crate::{
                 AlbumDragData, DragData, DragDropItemState, DragDropListConfig,
                 DragDropListManager, DragPreview, DropIndicator, TrackDragData,
                 calculate_drop_target, check_drag_cancelled, continue_edge_scroll,
-                get_edge_scroll_direction, handle_drag_move, handle_drop, perform_edge_scroll,
+                get_edge_scroll_direction, handle_drag_move, handle_drop_multi,
+                perform_edge_scroll,
             },
             icons::{CROSS, DISC, PLAYLIST_ADD, STAR, STAR_FILLED, TRASH, USERS, icon},
             managed_image::{ManagedImageKey, managed_image},
@@ -23,17 +24,17 @@ use crate::{
         library::{ViewSwitchMessage, add_to_playlist::AddToPlaylist},
     },
 };
-use cntp_i18n::tr;
+use cntp_i18n::{tr, trn};
 use gpui::*;
 use prelude::FluentBuilder;
-use rustc_hash::FxHashMap;
+use rustc_hash::{FxHashMap, FxHashSet};
 use std::time::Duration;
 
 use super::{
     components::button::{ButtonSize, ButtonStyle, button},
     models::{
         HasLikedState, LIKED_SONGS_PLAYLIST_ID, Models, PlaybackInfo, subscribe_liked_updates,
-        toggle_like,
+        toggle_like, toggle_like_by_id,
     },
     scroll_follow::SmoothScrollFollow,
     theme::Theme,
@@ -47,12 +48,90 @@ const QUEUE_ITEM_HEIGHT: f32 = 60.0;
 /// Duration of the queue auto-follow animation.
 const QUEUE_FOLLOW_ANIMATION_DURATION: Duration = Duration::from_millis(180);
 
+/// Shared selection state for the queue.
+pub struct QueueSelection {
+    selected: FxHashSet<usize>,
+    anchor: Option<usize>,
+}
+
+impl QueueSelection {
+    pub fn new(cx: &mut App) -> Entity<Self> {
+        cx.new(|_| Self {
+            selected: FxHashSet::default(),
+            anchor: None,
+        })
+    }
+
+    pub fn contains(&self, index: usize) -> bool {
+        self.selected.contains(&index)
+    }
+
+    pub fn is_multi(&self) -> bool {
+        self.selected.len() > 1
+    }
+
+    pub fn indices(&self) -> Vec<usize> {
+        let mut v: Vec<usize> = self.selected.iter().copied().collect();
+        v.sort_unstable();
+        v
+    }
+
+    pub fn clear(&mut self, cx: &mut Context<Self>) {
+        self.selected.clear();
+        self.anchor = None;
+        cx.notify();
+    }
+
+    /// Plain click: deselect all, select only this item.
+    pub fn select(&mut self, index: usize, cx: &mut Context<Self>) {
+        self.selected.clear();
+        self.selected.insert(index);
+        self.anchor = Some(index);
+        cx.notify();
+    }
+
+    /// Ctrl/Cmd+click: toggle this item in the selection.
+    pub fn ctrl_toggle(&mut self, index: usize, cx: &mut Context<Self>) {
+        if self.selected.contains(&index) {
+            self.selected.remove(&index);
+            if self.anchor == Some(index) {
+                self.anchor = self.selected.iter().copied().next();
+            }
+        } else {
+            self.selected.insert(index);
+            self.anchor = Some(index);
+        }
+        cx.notify();
+    }
+
+    /// Shift+click: select range from anchor to this item.
+    /// Replaces any previous range selection. If no anchor exists,
+    /// uses `current_position` (the currently-playing track) as the anchor.
+    pub fn shift_range(
+        &mut self,
+        index: usize,
+        current_position: Option<usize>,
+        cx: &mut Context<Self>,
+    ) {
+        let anchor = self.anchor.or(current_position).unwrap_or(index);
+        self.anchor = Some(anchor);
+        self.selected.clear();
+        let start = anchor.min(index);
+        let end = anchor.max(index);
+        for i in start..=end {
+            self.selected.insert(i);
+        }
+        cx.notify();
+    }
+}
+
 pub struct QueueItem {
     item: Option<QueueItemData>,
     current: usize,
     idx: usize,
     drag_drop_manager: Entity<DragDropListManager>,
     scroll_handle: UniformListScrollHandle,
+    selection: Entity<QueueSelection>,
     add_to: Option<Entity<AddToPlaylist>>,
     show_add_to: Entity<bool>,
     track_id: Option<i64>,
@@ -75,6 +154,7 @@ impl QueueItem {
         idx: usize,
         drag_drop_manager: Entity<DragDropListManager>,
         scroll_handle: UniformListScrollHandle,
+        selection: Entity<QueueSelection>,
     ) -> Entity<Self> {
         cx.new(move |cx| {
             cx.on_release(|m: &mut QueueItem, cx| {
@@ -106,9 +186,14 @@ impl QueueItem {
             })
             .detach();
 
+            cx.observe(&selection, |_, _, cx| {
+                cx.notify();
+            })
+            .detach();
+
             let show_add_to = cx.new(|_| false);
-            let add_to =
-                track_id.map(|track_id| AddToPlaylist::new(cx, show_add_to.clone(), track_id));
+            let add_to = track_id
+                .map(|track_id| AddToPlaylist::new(cx, show_add_to.clone(), vec![track_id]));
 
             let is_liked = track_id.and_then(|id| {
                 cx.playlist_has_track(LIKED_SONGS_PLAYLIST_ID, id)
@@ -123,6 +208,7 @@ impl QueueItem {
                 current: queue.read(cx).position,
                 drag_drop_manager,
                 scroll_handle,
+                selection,
                 add_to,
                 show_add_to,
                 track_id,
@@ -147,6 +233,7 @@ impl Render for QueueItem {
             .item
             .as_ref()
             .is_some_and(|queue_item| is_track_path_available(queue_item.get_path()));
+        let is_selected = self.selection.read(cx).contains(self.idx);
 
         if let Some(item) = ui_data.as_ref() {
             let scrollbar_always_visible = {
@@ -163,6 +250,30 @@ impl Render for QueueItem {
                     .map(|i| ManagedImageKey::TrackFile(i.get_path().to_path_buf()))
             });
             let idx = self.idx;
+            let current = self.current;
+            let selection = self.selection.clone();
+            let selection_for_drag = selection.clone();
+            let selection_for_aux = selection.clone();
+            let selection_read = selection.read(cx);
+            let is_multi_selected = selection_read.is_multi() && selection_read.contains(idx);
+            let selected_indices = if is_multi_selected {
+                selection_read.indices()
+            } else {
+                Vec::new()
+            };
+            let single_track_id = self.track_id;
+            let queue_item_entity = cx.entity().clone();
+
+            let selected_track_ids: Vec<i64> = if is_multi_selected {
+                let queue = cx.global::<Models>().queue.read(cx);
+                let queue_data = queue.data.read().expect("could not read queue");
+                selected_indices
+                    .iter()
+                    .filter_map(|&i| queue_data.get(i).and_then(|item| item.get_db_id()))
+                    .collect()
+            } else {
+                self.track_id.into_iter().collect()
+            };
 
             let item_state =
                 DragDropItemState::for_index(self.drag_drop_manager.read(cx), self.idx);
@@ -194,25 +305,71 @@ impl Render for QueueItem {
                         .border_b(px(1.0))
                         .border_color(theme.border_color)
                         .when(item_state.is_being_dragged, |div| div.opacity(0.5))
-                        .when(is_current && !item_state.is_being_dragged, |div| {
-                            div.bg(theme.queue_item_current)
+                        .when(is_selected && !item_state.is_being_dragged, |div| {
+                            div.bg(theme.queue_item_selected)
                         })
+                        .when(
+                            !is_selected && is_current && !item_state.is_being_dragged,
+                            |div| div.bg(theme.queue_item_current),
+                        )
                         .when(is_available, |div| {
-                            div.on_click(move |_, _, cx| {
-                                cx.global::<PlaybackInterface>().jump(idx);
+                            div.on_click(move |event: &ClickEvent, _, cx| {
+                                cx.stop_propagation();
+                                let modifiers = event.modifiers();
+                                let ctrl = modifiers.control || modifiers.platform;
+
+                                if event.click_count() == 2 {
+                                    cx.global::<PlaybackInterface>().jump(idx);
+                                } else if ctrl {
+                                    selection.update(cx, |s, cx| s.ctrl_toggle(idx, cx));
+                                } else if modifiers.shift {
+                                    selection
+                                        .update(cx, |s, cx| s.shift_range(idx, Some(current), cx));
+                                } else {
+                                    selection.update(cx, |s, cx| s.select(idx, cx));
+                                }
                             })
                         })
-                        .when(is_available && !item_state.is_being_dragged, |div| {
-                            div.hover(|div| div.bg(theme.queue_item_hover))
-                                .active(|div| div.bg(theme.queue_item_active))
-                        })
+                        .when(
+                            is_available && !is_selected && !item_state.is_being_dragged,
+                            |div| {
+                                div.hover(|div| div.bg(theme.queue_item_hover))
+                                    .active(|div| div.bg(theme.queue_item_active))
+                            },
+                        )
+                        .when(
+                            is_available && is_selected && !item_state.is_being_dragged,
+                            |div| {
+                                div.hover(|div| div.bg(theme.queue_item_selected))
+                                    .active(|div| div.bg(theme.queue_item_active))
+                            },
+                        )
                         .when(is_available, |div| {
-                            div.on_drag(DragData::new(idx, QUEUE_LIST_ID), move |_, _, _, cx| {
+                            let drag_data = if is_selected {
+                                let all = selection_for_drag.read(cx).indices();
+                                let primary = all
+                                    .iter()
+                                    .position(|&i| i == idx)
+                                    .expect("is_selected implies idx is in selection");
+                                DragData::new(idx, QUEUE_LIST_ID).with_additional_indices({
+                                    let mut others: Vec<usize> = all;
+                                    others.remove(primary);
+                                    others
+                                })
+                            } else {
+                                DragData::new(idx, QUEUE_LIST_ID)
+                            };
+                            div.on_drag(drag_data, move |_, _, _, cx| {
                                 DragPreview::new(cx, track_name.clone())
                             })
                             .drag_over::<DragData>(
                                 move |style, _, _, _| style.bg(gpui::rgba(0x88888822)),
                             )
+                        })
+                        .on_aux_click(move |ev: &ClickEvent, _, cx| {
+                            if ev.is_right_click() && !selection_for_aux.read(cx).contains(idx) {
+                                selection_for_aux.update(cx, |s, cx| s.select(idx, cx));
+                            }
                         })
                         .when_some(self.add_to.clone(), |this, that| this.child(that))
                         .child(DropIndicator::with_state(
@@ -289,7 +446,99 @@ impl Render for QueueItem {
                                 ),
                         ),
                 )
-                .child(
+                .child(if is_multi_selected {
+                    let remove_indices = selected_indices.clone();
+                    let remove_count = selected_indices.len();
+                    let add_to_ids = selected_track_ids.clone();
+                    let entity_for_add = queue_item_entity.clone();
+                    let show_add_to_multi = self.show_add_to.clone();
+
+                    let liked_ids: Vec<i64> = selected_track_ids
+                        .iter()
+                        .copied()
+                        .filter(|id| {
+                            cx.playlist_has_track(LIKED_SONGS_PLAYLIST_ID, *id)
+                                .ok()
+                                .flatten()
+                                .is_some()
+                        })
+                        .collect();
+                    let any_liked = !liked_ids.is_empty();
+
+                    menu()
+                        .when(!add_to_ids.is_empty(), |menu| {
+                            menu.item(menu_item(
+                                "add_to_playlist",
+                                Some(PLAYLIST_ADD),
+                                tr!("ADD_TO_PLAYLIST"),
+                                move |_, _, cx| {
+                                    entity_for_add.update(cx, |item, cx| match &item.add_to {
+                                        Some(add_to) => {
+                                            add_to.read(cx).set_track_ids(add_to_ids.clone());
+                                        }
+                                        None => {
+                                            item.add_to = Some(AddToPlaylist::new(
+                                                cx,
+                                                item.show_add_to.clone(),
+                                                add_to_ids.clone(),
+                                            ));
+                                        }
+                                    });
+                                    show_add_to_multi.write(cx, true);
+                                },
+                            ))
+                            .item(menu_separator())
+                        })
+                        .when(!selected_track_ids.is_empty(), |menu| {
+                            let track_ids_for_like = selected_track_ids.clone();
+                            let liked_ids = liked_ids.clone();
+                            menu.item(menu_item(
+                                "toggle_like",
+                                Some(if any_liked { STAR_FILLED } else { STAR }),
+                                if any_liked {
+                                    tr!("UNLIKE")
+                                } else {
+                                    tr!("LIKE")
+                                },
+                                move |_, _, cx| {
+                                    if any_liked {
+                                        for &track_id in &liked_ids {
+                                            let is_liked = cx
+                                                .playlist_has_track(
+                                                    LIKED_SONGS_PLAYLIST_ID,
+                                                    track_id,
+                                                )
+                                                .ok()
+                                                .flatten();
+                                            if is_liked.is_some() {
+                                                toggle_like_by_id(track_id, is_liked, cx);
+                                            }
+                                        }
+                                    } else {
+                                        for &track_id in &track_ids_for_like {
+                                            toggle_like_by_id(track_id, None, cx);
+                                        }
+                                    }
+                                },
+                            ))
+                            .item(menu_separator())
+                        })
+                        .item(menu_item(
+                            "remove_items",
+                            Some(CROSS),
+                            trn!(
+                                "REMOVE_N_FROM_QUEUE",
+                                "Remove {{count}} track from queue",
+                                "Remove {{count}} tracks from queue",
+                                count = remove_count
+                            ),
+                            move |_, _, cx| {
+                                cx.global::<PlaybackInterface>()
+                                    .remove_items(remove_indices.clone());
+                            },
+                        ))
+                } else {
+                    let entity_for_add = queue_item_entity.clone();
                     menu()
                         .when(self.add_to.is_some(), |menu| {
                             menu.item(
@@ -337,6 +586,20 @@ impl Render for QueueItem {
                                 Some(PLAYLIST_ADD),
                                 tr!("ADD_TO_PLAYLIST"),
                                 move |_, _, cx| {
+                                    if let Some(track_id) = single_track_id {
+                                        entity_for_add.update(cx, |item, cx| match &item.add_to {
+                                            Some(add_to) => {
+                                                add_to.read(cx).set_track_ids(vec![track_id]);
+                                            }
+                                            None => {
+                                                item.add_to = Some(AddToPlaylist::new(
+                                                    cx,
+                                                    item.show_add_to.clone(),
+                                                    vec![track_id],
+                                                ));
+                                            }
+                                        });
+                                    }
                                     show_add_to.write(cx, true);
                                 },
                             ))
@@ -366,8 +629,8 @@ impl Render for QueueItem {
                                 let playback = cx.global::<PlaybackInterface>();
                                 playback.remove_item(idx);
                             },
-                        )),
-                )
+                        ))
+                })
                 .into_any_element()
         } else {
             // TODO: Skeleton for this
@@ -387,6 +650,7 @@ pub struct Queue {
     show_queue: Entity<bool>,
     scroll_handle: UniformListScrollHandle,
     drag_drop_manager: Entity<DragDropListManager>,
+    selection: Entity<QueueSelection>,
     last_queue_position: usize,
     queue_hovered: bool,
     follow_current_pending: bool,
@@ -405,6 +669,7 @@ impl Queue {
 
             let config = DragDropListConfig::new(QUEUE_LIST_ID, px(QUEUE_ITEM_HEIGHT));
             let drag_drop_manager = DragDropListManager::new(cx, config);
+            let selection = QueueSelection::new(cx);
 
             cx.observe(&items, move |this: &mut Queue, _, cx| {
                 let new_position = cx.global::<Models>().queue.read(cx).position;
@@ -426,6 +691,8 @@ impl Queue {
                     .collect();
                 retain_views(&this.views_model, &valid_keys, cx);
 
+                this.selection.update(cx, |s, cx| s.clear(cx));
+
                 cx.notify();
             })
             .detach();
@@ -435,6 +702,7 @@ impl Queue {
                 show_queue,
                 scroll_handle: UniformListScrollHandle::new(),
                 drag_drop_manager,
+                selection,
                 last_queue_position: initial_queue_position,
                 queue_hovered: false,
                 follow_current_pending: initial_has_current_track,
@@ -463,6 +731,7 @@ impl Render for Queue {
         let scroll_handle = self.scroll_handle.clone();
         let item_scroll_handle = scroll_handle.clone();
         let drag_drop_manager = self.drag_drop_manager.clone();
+        let selection = self.selection.clone();
         let reduced_motion = cx
             .global::<SettingsGlobal>()
             .model
@@ -535,6 +804,9 @@ impl Render for Queue {
                     .w_full()
                     .h_full()
                     .relative()
+                    .on_click(cx.listener(|this, _: &ClickEvent, _, cx| {
+                        this.selection.update(cx, |s, cx| s.clear(cx));
+                    }))
                     .on_hover(cx.listener(|this, is_hovering: &bool, _, cx| {
                         if this.queue_hovered == *is_hovering {
                             return;
@@ -756,12 +1028,26 @@ impl Render for Queue {
                     ))
                     .on_drop(
                         cx.listener(move |this: &mut Queue, drag_data: &DragData, _, cx| {
-                            handle_drop(
+                            handle_drop_multi(
                                 this.drag_drop_manager.clone(),
                                 drag_data,
                                 cx,
-                                |from, to, cx| {
-                                    cx.global::<PlaybackInterface>().move_item(from, to);
+                                |drag_data, to, cx| {
+                                    if drag_data.additional_indices.is_empty() {
+                                        cx.global::<PlaybackInterface>()
+                                            .move_item(drag_data.source_index, to);
+                                    } else {
+                                        let corrected_to = to.saturating_sub(
+                                            drag_data
+                                                .additional_indices
+                                                .iter()
+                                                .filter(|&&idx| idx < to)
+                                                .count(),
+                                        );
+                                        let indices = drag_data.all_indices();
+                                        cx.global::<PlaybackInterface>()
+                                            .move_items(indices, corrected_to);
+                                    }
                                 },
                             );
                             cx.notify();
@@ -859,6 +1145,7 @@ impl Render for Queue {
 
                                         let drag_drop_manager = drag_drop_manager.clone();
                                         let scroll_handle = item_scroll_handle.clone();
+                                        let item_selection = selection.clone();
 
                                         let view = create_or_retrieve_view_keyed(
                                             &views_model,
@@ -870,6 +1157,7 @@ impl Render for Queue {
                                                     idx,
                                                     drag_drop_manager,
                                                     scroll_handle,
+                                                    item_selection,
                                                 )
                                             },
                                             cx,

@@ -33,8 +33,8 @@ use super::{
 
 use audio_engine::{AudioEngine, EngineCycleResult, EngineState};
 use queue_manager::{
-    DequeueResult, InsertResult, JumpResult, MoveResult, QueueManager, QueueNavigationResult,
-    ReplaceResult, Reshuffled, ShuffleResult, UndoResult,
+    DequeueManyResult, DequeueResult, InsertResult, JumpResult, MoveResult, QueueManager,
+    QueueNavigationResult, ReplaceResult, Reshuffled, ShuffleResult, UndoResult,
 };
 
 // throttle position broadcasts to prevent excees CPU utilization, especially while the application isn't
@@ -193,7 +193,9 @@ impl PlaybackThread {
                 PlaybackCommand::ToggleShuffle => self.toggle_shuffle(),
                 PlaybackCommand::SetRepeat(v) => self.set_repeat(v),
                 PlaybackCommand::RemoveItem(idx) => self.remove(idx),
+                PlaybackCommand::RemoveItems(indices) => self.remove_many(&indices),
                 PlaybackCommand::MoveItem { from, to } => self.move_item(from, to),
+                PlaybackCommand::MoveItems { indices, to } => self.move_items(indices, to),
                 PlaybackCommand::Undo => self.undo(),
                 PlaybackCommand::SettingsChanged(settings) => self.settings_changed(settings),
                 PlaybackCommand::SetPositionBroadcastActive(active) => {
@@ -485,6 +487,20 @@ impl PlaybackThread {
         }
     }
 
+    fn move_items(&mut self, indices: Vec<usize>, to: usize) {
+        use crate::playback::thread::queue_manager::MoveItemsResult;
+        match self.queue.move_items(indices, to) {
+            MoveItemsResult::Moved => {
+                self.send_event(PlaybackEvent::QueueUpdated);
+            }
+            MoveItemsResult::MovedCurrent { new_position } => {
+                self.send_event(PlaybackEvent::QueuePositionChanged(new_position));
+                self.send_event(PlaybackEvent::QueueUpdated);
+            }
+            MoveItemsResult::Unchanged => {}
+        }
+    }
+
     /// Undo the most recent queue mutation.
     fn undo(&mut self) {
         let previous_state = self.state();
@@ -575,6 +591,37 @@ impl PlaybackThread {
                 }
             }
             DequeueResult::Unchanged => {}
+        }
+    }
+
+    fn remove_many(&mut self, indices: &[usize]) {
+        match self.queue.dequeue_many(indices.to_vec()) {
+            DequeueManyResult::Removed { new_position } => {
+                self.refresh_rg_auto_hint();
+                self.send_event(PlaybackEvent::QueueUpdated);
+
+                if let Some(current) = self.queue.current_position()
+                    && current != new_position
+                {
+                    self.send_event(PlaybackEvent::QueuePositionChanged(new_position));
+                }
+            }
+            DequeueManyResult::RemovedCurrent { new_path } => {
+                self.refresh_rg_auto_hint();
+                self.send_event(PlaybackEvent::QueueUpdated);
+
+                if let Some(path) = new_path {
+                    if let Err(err) = self.open(&path) {
+                        error!(path = %path.display(), ?err, "Unable to open file: {err}");
+                    }
+                    if let Some(pos) = self.queue.current_position() {
+                        self.send_event(PlaybackEvent::QueuePositionChanged(pos));
+                    }
+                } else {
+                    self.stop();
+                }
+            }
+            DequeueManyResult::Unchanged => {}
         }
     }
 
