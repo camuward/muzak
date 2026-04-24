@@ -4,13 +4,17 @@ use std::{
     sync::{Arc, RwLock},
 };
 
-use crate::{paths, services::mmb::discord::Discord, ui::library::NavigationHistory};
+use crate::{
+    paths,
+    services::mmb::discord::{Discord, DiscordRpcStatus},
+    ui::library::NavigationHistory,
+};
 use gpui::{
     App, AppContext, AsyncApp, Context, Entity, EventEmitter, Global, Pixels, RenderImage, Size,
 };
 use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
-use tokio::sync::Mutex;
+use tokio::sync::{Mutex, watch};
 use tracing::{debug, error, warn};
 
 use crate::{
@@ -25,8 +29,8 @@ use crate::{
         thread::PlaybackState,
     },
     services::mmb::{
-        MediaMetadataBroadcastService,
-        lastfm::{LASTFM_CREDS, LastFM, client::LastFMClient, types::Session},
+        MediaMetadataBroadcastService, discord,
+        lastfm::{self, LASTFM_CREDS, LastFM, LastFMState, client::LastFMClient, types::Session},
     },
     settings::{
         SettingsGlobal,
@@ -46,13 +50,6 @@ impl EventEmitter<Metadata> for Metadata {}
 pub struct ImageEvent(pub Box<[u8]>);
 
 impl EventEmitter<ImageEvent> for Option<Arc<RenderImage>> {}
-
-#[derive(Clone)]
-pub enum LastFMState {
-    Disconnected,
-    AwaitingFinalization(String),
-    Connected(Session),
-}
 
 impl EventEmitter<Session> for LastFMState {}
 
@@ -77,6 +74,7 @@ pub struct Models {
     pub settings_health: Entity<SettingsHealth>,
     pub mmbs: Entity<MMBSList>,
     pub lastfm: Entity<LastFMState>,
+    pub discord_rpc: Entity<DiscordRpcStatus>,
     pub switcher_model: Entity<NavigationHistory>,
     pub show_about: Entity<bool>,
     pub playlist_tracker: Entity<PlaylistInfoTransfer>,
@@ -175,10 +173,18 @@ fn discord_rpc_enabled(cx: &App) -> bool {
         .discord_rpc_enabled
 }
 
+fn lastfm_enabled(cx: &App) -> bool {
+    cx.global::<SettingsGlobal>()
+        .model
+        .read(cx)
+        .services
+        .lastfm_enabled
+}
+
 fn sync_discord_mmbs(cx: &mut App, mmbs_list: &Entity<MMBSList>) {
     let enabled = discord_rpc_enabled(cx);
     debug!(enabled, "syncing discord MMBS state");
-    let discord = mmbs_list.read(cx).0.get("discord").cloned();
+    let discord = mmbs_list.read(cx).0.get(discord::MMBS_KEY).cloned();
     let Some(discord) = discord else {
         return;
     };
@@ -244,35 +250,68 @@ pub fn build_models(
         if LASTFM_CREDS.is_some() && let Ok(file) = File::open(path) {
             let reader = std::io::BufReader::new(file);
 
-            if let Ok(session) = serde_json::from_reader::<std::io::BufReader<File>, Session>(reader) {
-                create_last_fm_mmbs(cx, &mmbs, session.key.clone());
-                LastFMState::Connected(session)
-            } else {
-                error!("The last.fm session information is stored on disk but the file could not be opened.");
-                warn!("You will not be logged in to last.fm.");
-                LastFMState::Disconnected
+            match serde_json::from_reader::<std::io::BufReader<File>, Session>(reader) {
+                Ok(session) => {
+                    let enabled = lastfm_enabled(cx);
+                    create_last_fm_mmbs(cx, &mmbs, session.key.clone(), enabled);
+                    LastFMState::Connected(session)
+                }
+                Err(err) => {
+                    error!(?err, "The last.fm session information is stored on disk but the file could not be opened.");
+                    warn!("You will not be logged in to last.fm.");
+                    LastFMState::Disconnected {
+                        error: Some(format!("{err}").into()),
+                    }
+                }
             }
         } else {
-            LastFMState::Disconnected
+            LastFMState::Disconnected { error: None }
         }
     });
 
+    let initial_discord_status = if discord_rpc_enabled(cx) {
+        DiscordRpcStatus::Disconnected { error: None }
+    } else {
+        DiscordRpcStatus::Disabled
+    };
+    let discord_rpc = cx.new(|_| initial_discord_status.clone());
+    let (discord_status_tx, mut discord_status_rx) = watch::channel(initial_discord_status);
     let playlist_tracker: Entity<PlaylistInfoTransfer> = cx.new(|_| PlaylistInfoTransfer);
 
     let discord_mmbs = mmbs.clone();
-    create_discord_mmbs(cx, &discord_mmbs, discord_rpc_enabled(cx));
+    create_discord_mmbs(
+        cx,
+        &discord_mmbs,
+        discord_rpc_enabled(cx),
+        discord_status_tx,
+    );
+
+    let discord_rpc_model = discord_rpc.clone();
+    cx.spawn(async move |cx| {
+        while discord_status_rx.changed().await.is_ok() {
+            let status = discord_status_rx.borrow_and_update().clone();
+            discord_rpc_model.update(cx, |current, cx| {
+                *current = status;
+                cx.notify();
+            });
+        }
+    })
+    .detach();
 
     let settings_model = cx.global::<SettingsGlobal>().model.clone();
     let discord_mmbs = mmbs.clone();
+    let lastfm_sync_mmbs = mmbs.clone();
     cx.observe(&settings_model, move |_, cx| {
         sync_discord_mmbs(cx, &discord_mmbs);
+        sync_lastfm_mmbs(cx, &lastfm_sync_mmbs, lastfm_enabled(cx));
     })
     .detach();
 
     let lastfm_mmbs = mmbs.clone();
     cx.subscribe(&lastfm, move |m, ev, cx| {
         let session_clone = ev.clone();
-        create_last_fm_mmbs(cx, &lastfm_mmbs, session_clone.key.clone());
+        let enabled = lastfm_enabled(cx);
+        create_last_fm_mmbs(cx, &lastfm_mmbs, session_clone.key.clone(), enabled);
         m.update(cx, |m, cx| {
             *m = LastFMState::Connected(session_clone);
             cx.notify();
@@ -397,6 +436,7 @@ pub fn build_models(
         settings_health,
         mmbs,
         lastfm,
+        discord_rpc,
         switcher_model,
         show_about,
         playlist_tracker,
@@ -436,19 +476,41 @@ pub fn build_models(
     });
 }
 
-pub fn create_last_fm_mmbs(cx: &mut App, mmbs_list: &Entity<MMBSList>, session: String) {
+pub fn create_last_fm_mmbs(
+    cx: &mut App,
+    mmbs_list: &Entity<MMBSList>,
+    session: String,
+    enabled: bool,
+) {
     let mut client = LastFMClient::from_global().expect("creds known to be valid at this point");
     client.set_session(session);
-    let mmbs = LastFM::new(client);
+    let mmbs = LastFM::new(client, enabled);
     mmbs_list.update(cx, |m, _| {
-        m.0.insert("lastfm".to_string(), Arc::new(Mutex::new(mmbs)));
+        m.0.insert(lastfm::MMBS_KEY.to_string(), Arc::new(Mutex::new(mmbs)));
     });
 }
 
-pub fn create_discord_mmbs(cx: &mut App, mmbs_list: &Entity<MMBSList>, enabled: bool) {
-    let mmbs = Discord::new(enabled);
+pub fn sync_lastfm_mmbs(cx: &mut App, mmbs_list: &Entity<MMBSList>, enabled: bool) {
+    let lastfm = mmbs_list.read(cx).0.get(lastfm::MMBS_KEY).cloned();
+    let Some(lastfm) = lastfm else {
+        return;
+    };
+
+    crate::RUNTIME.spawn(async move {
+        let mut lastfm = lastfm.lock().await;
+        lastfm.set_enabled(enabled).await;
+    });
+}
+
+pub fn create_discord_mmbs(
+    cx: &mut App,
+    mmbs_list: &Entity<MMBSList>,
+    enabled: bool,
+    status_tx: watch::Sender<DiscordRpcStatus>,
+) {
+    let mmbs = Discord::new(enabled, status_tx);
     mmbs_list.update(cx, |m, _| {
-        m.0.insert("discord".to_string(), Arc::new(Mutex::new(mmbs)));
+        m.0.insert(discord::MMBS_KEY.to_string(), Arc::new(Mutex::new(mmbs)));
     });
 }
 

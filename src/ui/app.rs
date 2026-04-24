@@ -11,7 +11,7 @@ use gpui::*;
 use gpui_platform::current_platform;
 use prelude::FluentBuilder;
 use sqlx::SqlitePool;
-use tracing::debug;
+use tracing::{debug, warn};
 
 use crate::{
     library::{
@@ -24,7 +24,10 @@ use crate::{
         session_storage::PlaybackSessionStorageWorker, thread::PlaybackThread,
     },
     power::PowerManager,
-    services::controllers::{init_pbc_task, register_pbc_event_handlers},
+    services::{
+        controllers::{init_pbc_task, register_pbc_event_handlers},
+        mmb::lastfm,
+    },
     settings::{
         SettingsGlobal, setup_settings,
         storage::{Storage, StorageData},
@@ -325,6 +328,14 @@ pub fn run() -> anyhow::Result<()> {
         .inspect_err(|error| {
             tracing::error!(?error, "fatal: unable to create database pool");
         })?;
+
+    if !lastfm::is_available() {
+        warn!(
+            "Last.fm authentication disabled. \
+            Set `LASTFM_API_KEY` and `LASTFM_API_SECRET` to allow connecting to Last.fm."
+        );
+        warn!("These can additionally be set at compile time to bake them into the binary.");
+    }
 
     let application = Application::with_platform(current_platform(false))
         .with_assets(HummingbirdAssetSource::new(pool.clone()));
