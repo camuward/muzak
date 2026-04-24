@@ -30,8 +30,16 @@
         };
 
         rust-bin = inputs.rust-overlay.lib.mkRustBin {} pkgs;
-        toolchain = rust-bin.fromRustupToolchainFile ./rust-toolchain.toml;
-        craneLib = (inputs.crane.mkLib pkgs).overrideToolchain toolchain;
+        craneLib = let
+          toolchain = rust-bin.fromRustupToolchainFile ./rust-toolchain.toml;
+        in
+          ((inputs.crane.mkLib pkgs).overrideToolchain toolchain).overrideScope (_: _: {
+            stdenvSelector = p:
+              builtins.foldl' (acc: adapter: adapter acc) p.llvmPackages_latest.libcxxStdenv (lib.flatten [
+                (lib.optional p.stdenv.hostPlatform.isLinux p.stdenvAdapters.useMoldLinker)
+                (p.stdenvAdapters.withCFlags ["-flto=thin" "-Os"])
+              ]);
+          });
 
         mkArgs = overlay:
           lib.fix (lib.extends (lib.toExtension overlay) (_: {
@@ -46,6 +54,7 @@
                 ./translations
               ];
             };
+
             nativeBuildInputs = [pkgs.cmake pkgs.pkg-config];
             buildInputs = lib.flatten [
               (lib.optionals isLinux [
@@ -62,7 +71,10 @@
                 (pkgs.darwinMinVersionHook "10.15")
               ])
             ];
-            cargoExtraArgs = "--features=hummingbird/runtime_shaders";
+
+            CC_ENABLE_DEBUG_OUTPUT = "1";
+            cargoExtraArgs = "--features=hummingbird/runtime_shaders -vv";
+
             HUMMINGBIRD_VERSION_ID = builtins.substring 0 7 (inputs.self.rev or "dirty");
             HUMMINGBIRD_RELEASE_CHANNEL = "flake";
           }));
@@ -71,9 +83,9 @@
         formatter = pkgs.alejandra;
         apps = builtins.mapAttrs (_: pkg: {program = pkg + /bin/hummingbird;}) self'.packages;
         packages.default = craneLib.buildPackage (mkArgs (prev: {
-          CARGO_PROFILE = "release-distro";
           nativeBuildInputs =
             prev.nativeBuildInputs
+            ++ [pkgs.llvmPackages_latest.llvm pkgs.llvmPackages_latest.lld]
             ++ [
               (craneLib.buildPackage rec {
                 src = inputs.contemporary-rs;
@@ -86,14 +98,73 @@
               (pkgs.runCommandLocal "iconutil-shim" {nativeBuildInputs = [pkgs.makeWrapper];} ''
                 makeWrapper ${lib.getExe' pkgs.libicns "icnsutil"} "$out/bin/iconutil"
               '')
+              # https://github.com/rust-lang/rust/issues/60059#issuecomment-1972748340
+              (pkgs.writeShellApplication {
+                name = "macos-linker";
+                text = ''
+                  declare -a args=()
+                  for arg in "$@"
+                  do
+                    # options for linker
+                    if [[ $arg == "-Wl,"* ]]; then
+                      IFS=',' read -r -a options <<< "''${arg#-Wl,}"
+                      for option in "''${options[@]}"
+                      do
+                        if [[ $option == "-plugin="* ]] || [[ $option == "-plugin-opt=mcpu="* ]]; then
+                          # ignore -lto_library and -plugin-opt=mcpu
+                          :
+                        elif [[ $option == "-plugin-opt=O"* ]]; then
+                          # convert -plugin-opt=O* to --lto-CGO*
+                          args[''${#args[@]}]="-Wl,--lto-CGO''${option#-plugin-opt=O}"
+                        else
+                          # pass through other arguments
+                          args[''${#args[@]}]="-Wl,$option"
+                        fi
+                      done
+
+                    else
+                      # pass through other arguments
+                      args[''${#args[@]}]="$arg"
+                    fi
+                  done
+
+                  # use clang to call ld64
+                  exec ''${CC} -v "''${args[@]}"
+                '';
+              })
             ]
             ++ lib.optionals isLinux [pkgs.autoPatchelfHook];
           runtimeDependencies = lib.optionals isLinux [
             pkgs.wayland
             pkgs.vulkan-loader
           ];
+
+          CARGO_PROFILE = "release-debug";
+          CARGO_BUILD_RUSTFLAGS = lib.concatStringsSep " " [
+            "-Csymbol-mangling-version=v0"
+            "-Clinker-plugin-lto"
+            "-Clinker=${
+              if isDarwin
+              then "macos-linker"
+              else "clang"
+            }"
+            "-Clink-arg=--ld-path=${
+              if isDarwin
+              then "ld64.lld"
+              else "ld.lld"
+            }"
+          ];
+
+          dontStrip = true;
           installPhaseCommand =
             ''
+              (
+                OUTPUT_BIN="''${CARGO_TARGET_DIR:-target}"/"$CARGO_PROFILE"/hummingbird
+                llvm-dwarfutil "$OUTPUT_BIN" "$OUTPUT_BIN"
+                llvm-objcopy --compress-debug-sections=zlib "$OUTPUT_BIN"
+              )
+            ''
+            + ''
               cargo cntp-bundle --no-open --profile "$CARGO_PROFILE"
             ''
             + lib.optionalString isLinux ''
@@ -109,29 +180,22 @@
 
         checks = lib.mergeAttrs self'.packages {
           cargoClippy = craneLib.cargoClippy craneArgs;
-          cargoTarpaulin = craneLib.cargoTarpaulin craneArgs;
         };
 
         devShells.default = let
-          adapters = lib.flatten [
-            (lib.optional isLinux pkgs.stdenvAdapters.useMoldLinker)
-          ];
-          craneLib = (inputs.crane.mkLib pkgs).overrideToolchain (rust-bin.selectLatestNightlyWith (toolchain:
-            toolchain.default.override {
-              extensions = ["rust-analyzer" "rust-src" "clippy" "rustfmt" "rustc-codegen-cranelift-preview"];
-            }));
-          craneDevShell = craneLib.devShell.override {
-            mkShell = pkgs.mkShell.override {
-              stdenv = builtins.foldl' (acc: adapter: adapter acc) pkgs.llvmPackages_latest.stdenv adapters;
-            };
-          };
+          nightlyCraneLib = craneLib.overrideToolchain (rust-bin.selectLatestNightlyWith (toolchain: toolchain.default.override {extensions = ["rust-analyzer" "rust-src" "clippy" "rustfmt" "rustc-codegen-cranelift-preview"];}));
         in
-          craneDevShell {
+          nightlyCraneLib.devShell {
             inherit (self') checks;
-            packages = [
-              pkgs.sqlite-interactive
-              pkgs.tokio-console
-            ];
+            packages =
+              [
+                pkgs.sqlite-interactive
+                pkgs.tokio-console
+              ]
+              ++ lib.optionals isLinux [
+                pkgs.mold
+                pkgs.wild
+              ];
 
             LD_LIBRARY_PATH = lib.optionalString isLinux (
               lib.makeLibraryPath [

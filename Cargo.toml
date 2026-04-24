@@ -132,20 +132,21 @@ zbus = "5"
 split-debuginfo = "unpacked"
 
 [profile.dev-optimized]
-inherits = "release"
-debug = "full"
-strip = "none"
-lto = "none"
-opt-level = "s"
+inherits = "release-debug"
+lto = false # thin-local
 
 [profile.release]
 opt-level = "s"
 lto = "thin"
 strip = "symbols"
 
-[profile.release-distro]
+[profile.release-debug]
 inherits = "release"
+debug = "full"
+strip = "none"
+split-debuginfo = "off"
+
+[profile.release-distro]
+inherits = "release-debug"
 codegen-units = 1
 lto = "fat"
-debug = "full"
-split-debuginfo = "packed"
